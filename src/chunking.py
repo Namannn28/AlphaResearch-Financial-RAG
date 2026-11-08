@@ -70,7 +70,38 @@ class SectionAwareFinancialChunker:
             if len(content.strip()) < self.min_chars:
                 continue
 
-            paragraphs = [p.strip() for p in content.split("\n\n") if p.strip()]
+            # First split on double newlines if present; otherwise group by lines
+            if "\n\n" in content:
+                raw_paras = [p.strip() for p in content.split("\n\n") if p.strip()]
+            else:
+                # Group lines into ~30-50 word units so we don't have one gigantic paragraph
+                lines = [l.strip() for l in content.split("\n") if l.strip()]
+                raw_paras = []
+                cur_p = []
+                cur_wc = 0
+                for line in lines:
+                    cur_p.append(line)
+                    cur_wc += len(line.split())
+                    if cur_wc >= 40 or line.endswith((".", ":", ";")):
+                        raw_paras.append(" ".join(cur_p))
+                        cur_p = []
+                        cur_wc = 0
+                if cur_p:
+                    raw_paras.append(" ".join(cur_p))
+
+            # Break any overly large paragraphs (> target_chunk_words) into smaller pieces
+            paragraphs: List[str] = []
+            for p in raw_paras:
+                words = p.split()
+                if len(words) <= self.target_chunk_words:
+                    paragraphs.append(p)
+                else:
+                    step = max(50, self.target_chunk_words - 40)
+                    for i in range(0, len(words), step):
+                        sub_p = " ".join(words[i:i + self.target_chunk_words])
+                        if sub_p.strip():
+                            paragraphs.append(sub_p)
+
             current_buffer: List[str] = []
             current_word_count = 0
 

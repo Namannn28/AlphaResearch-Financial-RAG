@@ -98,8 +98,14 @@ class DocumentIngestionEngine:
         full_text_pages = []
         sections: List[Dict[str, Any]] = []
 
+        # Derive clean human-readable name from filename (stripping session_ prefix)
+        raw_stem = file_path.stem
+        if raw_stem.lower().startswith("session_"):
+            raw_stem = raw_stem[8:]
+        clean_name = raw_stem.replace("_", " ").strip().title()
+
         doc_meta = {
-            "company": file_path.stem.replace("_", " ").title().split()[0],
+            "company": clean_name if clean_name else "Custom Document",
             "ticker": "PDF",
             "fiscal_year": "2023"
         }
@@ -111,8 +117,8 @@ class DocumentIngestionEngine:
             full_text_pages.append(text)
 
             # Detect headings or treat each page / major paragraph as a section
-            lines = text.split("\n")
-            first_line = lines[0].strip() if lines else f"Page {page_idx}"
+            lines = [l.strip() for l in text.split("\n") if l.strip()]
+            first_line = lines[0] if lines else f"Page {page_idx}"
             title = first_line[:60] if len(first_line) > 5 else f"Page {page_idx} Excerpt"
 
             sections.append({
@@ -123,10 +129,23 @@ class DocumentIngestionEngine:
 
         combined_raw = "\n\n--- Page Break ---\n\n".join(full_text_pages)
 
+        # Check if first page explicitly specifies Company or Ticker in header
         if full_text_pages:
-            detected = self.extract_metadata_from_header(full_text_pages[0], file_path.name)
-            if detected["company"] != "Unknown":
-                doc_meta = detected
+            first_page_lines = full_text_pages[0].split("\n")[:25]
+            for line in first_page_lines:
+                line_lower = line.strip().lower()
+                if "company:" in line_lower:
+                    c = line.split(":", 1)[1].strip()
+                    if c:
+                        doc_meta["company"] = c
+                elif "ticker:" in line_lower:
+                    t = line.split(":", 1)[1].strip().upper()
+                    if t:
+                        doc_meta["ticker"] = t
+                elif "fiscal year:" in line_lower:
+                    y = line.split(":", 1)[1].strip()
+                    if y:
+                        doc_meta["fiscal_year"] = y
 
         return FinancialDocument(
             doc_id=file_path.stem,

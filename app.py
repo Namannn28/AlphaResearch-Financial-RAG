@@ -217,7 +217,10 @@ with st.expander("📤 Upload Custom Document / PDF (Optional)", expanded=len(st
                 except Exception:
                     pass
 
-                st.success(f"✅ Successfully indexed '{uploaded_file.name}' (+{new_chunks} chunks)! It is now private to your chat.")
+                if new_chunks == 0:
+                    st.warning(f"⚠️ '{uploaded_file.name}' was uploaded, but 0 text chunks could be extracted. Please ensure the PDF contains searchable text.")
+                else:
+                    st.success(f"✅ Successfully indexed '{uploaded_file.name}' (+{new_chunks} chunks)! It is now active and private to your chat.")
                 time.sleep(1)
                 st.rerun()
 

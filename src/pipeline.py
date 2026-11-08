@@ -169,6 +169,22 @@ class FinancialRAGPipeline:
         active_query = prep.corrected_query
         target_company = filter_company or prep.detected_company
 
+        # Conversational Context Resolution:
+        # If no company detected directly in query, check recent conversation history
+        if not target_company and conversation_history:
+            for prev_msg in reversed(conversation_history):
+                prev_text = prev_msg.get("content", "")
+                found = self.query_preprocessor.detect_company(prev_text)
+                if found:
+                    target_company = found
+                    break
+
+        # If company resolved from context, ensure query includes it for retrieval
+        if target_company and target_company.lower() not in active_query.lower():
+            retrieval_query = f"{target_company} {active_query}"
+        else:
+            retrieval_query = active_query
+
         if not self.is_indexed:
             self.load_and_index()
 
@@ -177,12 +193,12 @@ class FinancialRAGPipeline:
         # Step 1: Retrieval
         if self.use_hybrid:
             initial_hits = self.hybrid_retriever.retrieve(
-                query=active_query,
+                query=retrieval_query,
                 top_k=config.retrieval_top_k,
                 filter_company=target_company
             )
         else:
-            q_vec = self.embedding_engine.embed_query(active_query)
+            q_vec = self.embedding_engine.embed_query(retrieval_query)
             initial_hits = self.vector_store.similarity_search(
                 q_vec,
                 top_k=config.retrieval_top_k,
@@ -192,7 +208,7 @@ class FinancialRAGPipeline:
         # Step 2: Reranking
         if self.use_reranker and initial_hits:
             final_hits = self.reranker.rerank(
-                query=active_query,
+                query=retrieval_query,
                 candidate_hits=initial_hits,
                 top_k=top_k
             )

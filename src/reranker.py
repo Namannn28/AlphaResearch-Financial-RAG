@@ -56,13 +56,25 @@ class FinancialCrossEncoderReranker:
         "total", "fiscal", "year", "2023", "2022", "annual", "report", "company",
         "tell", "me", "about", "give", "show", "can", "you", "please", "know",
         "information", "info", "details", "summary", "overview", "all", "some",
-        "find", "explain", "describe", "look", "up", "get", "share"
+        "find", "explain", "describe", "look", "up", "get", "share",
+        "yes", "yeah", "yep", "sure", "ok", "okay", "also", "now", "i", "want",
+        "need", "like", "would", "first", "next", "which", "whose", "one", "do", "does",
+        "here", "there", "is", "it", "are", "were", "been", "being", "having", "has", "had",
+        "could", "should", "thanks", "thank"
     }
 
     FINANCIAL_DOMAIN_TERMS = {
         "financials", "financial", "revenue", "revenues", "sales", "profit", "margin",
         "margins", "income", "expenses", "deliveries", "capex", "growth", "business",
-        "performance", "overview", "expenditures", "earnings", "guidance"
+        "performance", "overview", "expenditures", "earnings", "guidance",
+        "conservation", "energy", "technology", "absorption", "governance", "csr",
+        "board", "director", "directors", "report", "auditor", "audit", "compliance",
+        "policy", "shareholders", "dividend", "pat", "ebitda", "assets", "liabilities",
+        "cash", "flow", "equity", "debt", "r&d", "research", "development", "subsidiary",
+        "segment", "balance", "sheet", "statement", "notes", "ratio", "ratios", "schedule",
+        "foreign", "exchange", "outgo", "turnover", "profitability", "capital", "expenditure",
+        "measures", "initiatives", "operations", "production", "capacity", "cost", "costs",
+        "management", "discussion", "analysis"
     }
 
     def __init__(
@@ -133,25 +145,32 @@ class FinancialCrossEncoderReranker:
 
             final_score = float(score)
 
-            # Check if any foreign non-financial term is missing from the document
+            # Check substantive word overlap
+            matched_substantive = [
+                w for w in substantive_terms
+                if w in text_lower or (len(w) > 4 and w.rstrip("s") in text_lower)
+            ]
+            substantive_ratio = len(matched_substantive) / max(1, len(substantive_terms))
+
+            # Foreign non-financial terms completely absent from document
             missing_foreign = [
                 w for w in foreign_terms
                 if w not in text_lower and (len(w) > 4 and w.rstrip("s") not in text_lower)
             ]
 
-            if missing_foreign:
-                # Genuine adversarial out-of-corpus query (e.g., airline, flying cars)
+            # If genuine foreign hallucination terms exist and are completely absent from document
+            if foreign_terms and len(missing_foreign) == len(foreign_terms):
+                # Genuine adversarial out-of-corpus query (e.g., airline, flying cars, submarines)
                 final_score *= 0.15
-            elif is_company_match:
-                # Legitimate in-corpus question or broad conversational query about a company
-                # Give high confidence floor for grounded company financial excerpts
+            elif substantive_ratio >= 0.4:
+                # Strong topical or heading match
                 final_score = max(final_score, 0.88)
-            else:
-                # General query: check substantive overlap
-                if substantive_terms:
-                    matched = [w for w in substantive_terms if w in text_lower or (len(w) > 4 and w.rstrip("s") in text_lower)]
-                    if len(matched) / len(substantive_terms) < 0.35:
-                        final_score *= 0.25
+            elif is_company_match and (not substantive_terms or substantive_ratio >= 0.3):
+                # Conversational or general query grounded in targeted company
+                final_score = max(final_score, 0.88)
+            elif substantive_terms and substantive_ratio < 0.25:
+                # Low substantive overlap
+                final_score *= 0.35
 
             reranked_hits.append({
                 "chunk": hit["chunk"],
