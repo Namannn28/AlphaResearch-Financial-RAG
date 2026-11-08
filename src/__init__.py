@@ -1,1 +1,1 @@
-# CandidateFit-RAG Source Package
+# AlphaResearch-Financial-RAG Source Package

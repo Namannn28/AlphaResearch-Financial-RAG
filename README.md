@@ -86,8 +86,8 @@ Each stage can be inspected and run individually to understand the data flow:
 ### 1. Setup Virtual Environment
 ```bash
 # Clone the repository
-git clone https://github.com/Namannn28/CandidateFit-RAG.git
-cd CandidateFit-RAG
+git clone https://github.com/Namannn28/AlphaResearch-Financial-RAG.git
+cd AlphaResearch-Financial-RAG
 
 # Activate virtual environment
 # Windows (PowerShell):
