@@ -93,6 +93,16 @@
 **Answer**:
 > *"In both the terminal CLI (`chat.py`) and Streamlit web app (`app.py`), we use `pypdf` to extract text and page metadata on the fly. The extracted text is passed through our section-aware chunker, dynamically vector-embedded, and added to the BM25 index. Multi-turn chat maintains a structured `conversation_history` message list conforming to standard role-based schemas (`system`, `user`, `assistant`), passing retrieved context alongside chat memory."*
 
+### Q7: Why would an enterprise use this custom RAG system instead of just uploading files to ChatGPT?
+**Answer (The Enterprise Value Proposition)**:
+> *"ChatGPT is a general consumer chatbot; it is **not an enterprise data system**. An enterprise—especially in finance, banking, or healthcare—cannot simply use ChatGPT for four fundamental engineering and business reasons:*
+>
+> 1. ***Data Privacy & SEC Compliance (Zero Data Leakage)***: Enterprises legally cannot upload private financial filings, internal audits, or customer portfolios to external public LLM endpoints where data can be logged or used for training. Our system operates locally with isolated session memory (`create_session_pipeline`), guaranteeing that confidential documents never leak across users or to third parties.
+> 2. ***Numerical Precision vs. Attention Drift (BM25 + Dense Hybrid)***: Standard LLMs use pure semantic attention, which notoriously rounds, interpolates, or swaps closely spaced financial numbers (e.g., confusing `$383,285M` with `$393,285M` or mixing FY2022 with FY2023). Our pipeline enforces **BM25 exact keyword matching** combined with Dense vector search via **Reciprocal Rank Fusion (RRF)** to anchor answers on exact numerical tokens.
+> 3. ***Deterministic Hallucination Guardrail ($\tau = 0.28$)***: ChatGPT is trained to be conversational and agreeable—when given out-of-corpus or adversarial prompts (e.g., 'What was Tesla's commercial airline revenue?'), it often hallucinates plausible-sounding figures. Our system includes a Cross-Encoder reranker and substantive token guardrail that cuts confidence below 0.28 and returns a deterministic `INSUFFICIENT_EVIDENCE` refusal. In finance, an honest refusal is 100x safer than a confident hallucination.
+> 4. ***Compliance-Grade Page Citations & Traceability***: Financial analysts cannot submit recommendations based on opaque AI output. Our pipeline extracts and displays exact page numbers, section headers, and company metadata for every claim, making every figure verifiable in seconds.
+> 5. ***Scale, Latency & Cost***: Uploading 500 reports of 100+ pages into ChatGPT exceeds context limits, costs significant per-token fees, and takes minutes. Our pre-indexed hybrid search retrieves top relevant passages in **sub-15ms** on free, local CPU vector stores."*
+
 ---
 
 ## 📝 4. Ready-to-Use Resume Bullets
