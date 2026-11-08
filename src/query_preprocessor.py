@@ -118,18 +118,10 @@ class QueryPreprocessor:
 
         if clean in GREETING_WORDS or any(clean.startswith(f"{g} ") for g in ["hi", "hello", "hey", "good morning", "good evening"]):
             polite_greeting = (
-                "Hello! 👋 I am **AlphaResearch**, your AI Financial Research Assistant.\n\n"
-                "I can analyze and compare verified SEC 10-K annual filings for:\n"
-                "- **Apple Inc. (AAPL)**\n"
-                "- **Microsoft Corporation (MSFT)**\n"
-                "- **Tesla, Inc. (TSLA)**\n"
-                "- **Alphabet Inc. (GOOGL)**\n"
-                "- **Amazon.com, Inc. (AMZN)**\n"
-                "- Plus any custom financial report or **PDF** you upload or drag into the chat.\n\n"
-                "How can I help you today? You can ask questions like:\n"
-                "*• \"Tell me about financials for Apple\"*\n"
-                "*• \"What was Microsoft's Azure cloud revenue in FY23?\"*\n"
-                "*• \"Compare Tesla and Amazon operating margins\"*"
+                "Hello! 👋 I am your AI Financial Analyst.\n\n"
+                "I can help you analyze financial disclosures, extract key metrics, evaluate performance, "
+                "and review any financial reports or PDFs you provide.\n\n"
+                "How can I assist you today?"
             )
             return True, polite_greeting
 
