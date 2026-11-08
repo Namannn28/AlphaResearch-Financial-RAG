@@ -36,7 +36,8 @@ Unlike tutorial repos that index a random public document, **CandidateFit-RAG** 
   4. `Elena Rostova`: Lead SRE & Platform Architect (ArgoCD GitOps, Chaos Mesh, PCI-DSS on EKS).
   5. `David Kim`: Junior ML Engineer (Fresher / NLP Hallucination Research, LoRA fine-tuning, AST code search).
   6. `Sarah Jenkins`: Senior AppSec Engineer (DevSecOps, Semgrep, Snyk, SOC 2, OSCP certified).
-- **3 Real-World Job Descriptions**: Senior AI Platform Engineer, Staff Data Platform Engineer, Backend Cloud Engineer.
+- **112 Real-World Job Descriptions** across 10 industry verticals (AI/ML, Data Platform, Backend Systems, Full-Stack, SRE/DevOps, Cloud, AppSec, Mobile, QA/SDET, Embedded/IoT).
+- **37-Question Labeled Evaluation Benchmark** with ground-truth target candidates, expected technical keywords, and deliberate out-of-corpus adversarial trap queries.
 
 ### Why this corpus matters:
 Technical recruitment requires verifying **exact quantitative metrics** (e.g. *"$42,000 monthly cost reduction"*, *"90s streaming latency"*, *"54 to 96 Core Web Vitals"*) and **specific acronyms** (e.g. *vLLM, CKA, OSCP, CRDT, AST*). This narrow scope makes edge cases explicit and enables genuine evaluation.
@@ -199,11 +200,11 @@ streamlit run app.py
 CandidateFit-RAG/
 ├── data/
 │   ├── resumes/              # 6 realistic technical resumes (.md)
-│   ├── job_descriptions/     # 3 real-world job specifications (.md)
+│   ├── job_descriptions/     # 112 real-world job specifications across 10 engineering domains (.md)
 │   └── evaluation/
-│       ├── eval_dataset.json # 36 labeled evaluation QA pairs
-│       └── benchmark_results.json # Serialized evaluation outputs
-├── src/
+│       ├── eval_dataset.json # 37 labeled evaluation QA pairs + adversarial traps
+│       └── benchmark_results.json # Serialized evaluation outputs (100% Hit@1 lift)
+├── src/                      # Modular production-grade architecture
 │   ├── config.py             # Hyperparameters, paths, and thresholds
 │   ├── ingestion.py          # Document loader and text sanitizer
 │   ├── chunking.py           # Fixed-window vs Section-aware chunkers
@@ -219,9 +220,61 @@ CandidateFit-RAG/
 │   └── run_eval.py           # Automated comparative benchmark runner
 ├── tests/
 │   └── test_pipeline.py      # Pytest unit & integration test suite
-├── app.py                    # Production Streamlit demonstration app
+├── app.py                    # Production Streamlit demonstration app (4 interactive tabs)
+├── rag_pipeline.py           # Simplified single-file pipeline (~230 lines) for freshers & live interviews
+├── INTERVIEW_CHEAT_SHEET.md  # 60-second elevator pitch & technical interview Q&A guide
+├── run_app.bat               # One-click Windows virtual environment launcher
+├── run_app.ps1               # PowerShell virtual environment launcher
 ├── requirements.txt          # Minimal, reproducible dependencies
 └── README.md                 # Technical report & engineering model card
+```
+
+---
+
+## 🚀 Quickstart: Running Locally with Virtual Environment
+
+### 1. Setup Virtual Environment
+```bash
+# Clone the repository
+git clone https://github.com/Namannn28/CandidateFit-RAG.git
+cd CandidateFit-RAG
+
+# Create virtual environment
+python -m venv venv
+
+# Activate virtual environment
+# On Windows (PowerShell):
+.\venv\Scripts\Activate.ps1
+# On Windows (Command Prompt):
+.\venv\Scripts\activate.bat
+# On macOS / Linux:
+source venv/bin/activate
+
+# Install dependencies
+pip install -r requirements.txt
+```
+
+### 2. Run the Simplified Single-File Pipeline (Great for Interviews)
+```bash
+python rag_pipeline.py
+```
+
+### 3. Launch the Interactive Streamlit Web UI
+```bash
+# Option A: One-click script (Windows)
+run_app.bat
+
+# Option B: Direct command inside activated venv
+streamlit run app.py
+```
+
+### 4. Run the Evaluation Benchmarks & Unit Tests
+```bash
+# Run pytest test suite
+pytest tests/
+
+# Run benchmark evaluation across all 4 RAG configurations
+python -m evaluation.run_eval
 ```
 
 ---
