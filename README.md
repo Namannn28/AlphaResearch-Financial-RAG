@@ -129,17 +129,26 @@ source venv/bin/activate
 pip install -r requirements.txt
 ```
 
-### 2. Run the Simplified Single-File Pipeline (Great for Interviews)
+### 2. Run Interactive Terminal Chat (No Streamlit Needed!)
+```bash
+python chat.py
+```
+- Real-time conversational CLI pipeline over SEC 10-K filings.
+- Custom system prompt & multi-turn message history stored in a Python dictionary.
+- High-speed LangChain ChatGroq generation with citations and refusal guardrails.
+- Built-in commands: `history`, `clear`, `prompt`, `exit`.
+
+### 3. Run the Simplified Single-File Pipeline (Great for 5-Min Interview Walkthroughs)
 ```bash
 python simple_rag.py
 ```
 
-### 3. Launch the Interactive Streamlit Web UI
+### 4. Launch the Interactive Streamlit Web UI (Optional)
 ```bash
 streamlit run app.py
 ```
 
-### 4. Run Pytest Suite & Quantitative Benchmarks
+### 5. Run Pytest Suite & Quantitative Benchmarks
 ```bash
 # Run unit tests
 pytest tests/
@@ -175,6 +184,7 @@ AlphaResearch-Financial-RAG/
 │   └── run_eval.py              # Automated 4-configuration benchmark runner
 ├── tests/
 │   └── test_pipeline.py         # Pytest test suite (6/6 passing)
+├── chat.py                      # Interactive terminal RAG chat with system prompt & history
 ├── app.py                       # 4-tab Streamlit web application
 ├── simple_rag.py                # Single-file ~220-line interview-ready script (LangChain)
 ├── INTERVIEW_CHEAT_SHEET.md     # 60-second pitch, interview Q&A, and resume guide

@@ -25,6 +25,17 @@ import urllib.request
 from pathlib import Path
 from dataclasses import dataclass
 from typing import List, Dict, Any, Optional
+from dotenv import load_dotenv
+
+# Load .env file automatically
+load_dotenv()
+
+import sys
+if sys.stdout and hasattr(sys.stdout, "reconfigure"):
+    try:
+        sys.stdout.reconfigure(encoding="utf-8")
+    except Exception:
+        pass
 
 # ----------------------------------------------------------------------------
 # 1. Data Models
@@ -170,18 +181,26 @@ class FinancialRAG:
         self.chunk_vectors = self.embedder.embed([c.text for c in self.chunks])
         self.groq_key = groq_api_key or os.getenv("GROQ_API_KEY", "")
 
-        # Initialize LangChain ChatGroq model (Free Tier Llama 3.3 70B)
+        # Initialize LangChain ChatGroq model (Free Tier GPT-OSS 120B on Groq)
         self.chat_model = None
         if self.groq_key:
             try:
                 from langchain_groq import ChatGroq
                 self.chat_model = ChatGroq(
-                    model="llama-3.3-70b-versatile",
+                    model="openai/gpt-oss-120b",
                     groq_api_key=self.groq_key,
                     temperature=0.1
                 )
             except Exception:
-                self.chat_model = None
+                try:
+                    from langchain_groq import ChatGroq
+                    self.chat_model = ChatGroq(
+                        model="openai/gpt-oss-20b",
+                        groq_api_key=self.groq_key,
+                        temperature=0.1
+                    )
+                except Exception:
+                    self.chat_model = None
 
     def answer_query(self, query: str, confidence_threshold: float = 0.28) -> str:
         """Runs hybrid search, evaluates confidence, and produces an answer with citations."""

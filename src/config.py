@@ -6,9 +6,11 @@ Centralizes all file paths, model identifiers, chunking sizes, and safety thresh
 from dataclasses import dataclass
 from pathlib import Path
 import os
+from dotenv import load_dotenv
 
 # Base directory paths
 BASE_DIR = Path(__file__).resolve().parent.parent
+load_dotenv(BASE_DIR / ".env")
 DATA_DIR = BASE_DIR / "data"
 REPORTS_DIR = DATA_DIR / "financial_reports"
 EVAL_DIR = DATA_DIR / "evaluation"
@@ -41,8 +43,9 @@ class FinancialRAGConfig:
     confidence_threshold: float = 0.28
 
     # LLM Settings
-    default_provider: str = "groq"  # "groq" (default free), "mistral", or "offline"
-    groq_model: str = "llama-3.3-70b-versatile"
+    default_provider: str = "groq"  # "groq" (default free) or "offline"
+    groq_model: str = "openai/gpt-oss-120b"
+    groq_fallback_model: str = "openai/gpt-oss-20b"
     temperature: float = 0.1
     max_tokens: int = 600
 

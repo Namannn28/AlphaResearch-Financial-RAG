@@ -55,13 +55,21 @@ CRITICAL INSTRUCTIONS:
         """Initializes LangChain ChatGroq model with user's free API key."""
         try:
             self._groq_chat_model = ChatGroq(
-                model="llama-3.3-70b-versatile",
+                model="openai/gpt-oss-120b",
                 groq_api_key=self.groq_api_key,
                 temperature=0.1,
                 max_tokens=600
             )
         except Exception:
-            self._groq_chat_model = None
+            try:
+                self._groq_chat_model = ChatGroq(
+                    model="openai/gpt-oss-20b",
+                    groq_api_key=self.groq_api_key,
+                    temperature=0.1,
+                    max_tokens=600
+                )
+            except Exception:
+                self._groq_chat_model = None
 
     def set_keys(self, groq_key: Optional[str] = None, mistral_key: Optional[str] = None):
         """Allows updating API keys dynamically from the Streamlit UI."""
