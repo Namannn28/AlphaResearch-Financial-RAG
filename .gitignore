@@ -22,3 +22,6 @@ Thumbs.db
 
 # Large model caches
 .cache/
+
+# User uploaded files
+data/uploads/

@@ -22,6 +22,7 @@ except Exception:
 
 DATA_DIR = BASE_DIR / "data"
 REPORTS_DIR = DATA_DIR / "financial_reports"
+UPLOADS_DIR = DATA_DIR / "uploads"
 EVAL_DIR = DATA_DIR / "evaluation"
 EVAL_DATASET_PATH = EVAL_DIR / "financial_eval_dataset.json"
 BENCHMARK_RESULTS_PATH = EVAL_DIR / "financial_benchmark_results.json"

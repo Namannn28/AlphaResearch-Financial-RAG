@@ -15,7 +15,7 @@ import time
 from pathlib import Path
 import os
 
-from src.config import config, REPORTS_DIR
+from src.config import config, REPORTS_DIR, UPLOADS_DIR
 from src.pipeline import FinancialRAGPipeline
 
 # Page Configuration
@@ -91,7 +91,8 @@ with st.sidebar:
         help="Upload any financial filing or document to query it live."
     )
     if uploaded_file is not None:
-        save_path = REPORTS_DIR / uploaded_file.name
+        UPLOADS_DIR.mkdir(parents=True, exist_ok=True)
+        save_path = UPLOADS_DIR / uploaded_file.name
         if not save_path.exists():
             with open(save_path, "wb") as f:
                 f.write(uploaded_file.getbuffer())
@@ -99,8 +100,6 @@ with st.sidebar:
             st.success(f"✅ Indexed '{uploaded_file.name}' (+{added_chunks} chunks)!")
             time.sleep(1)
             st.rerun()
-        else:
-            st.info(f"'{uploaded_file.name}' is indexed and ready.")
 
     st.markdown("---")
 
@@ -124,10 +123,29 @@ with st.sidebar:
 
     st.markdown("---")
 
-    # 4. Indexed Documents List
-    st.subheader("📚 Available Documents")
+    # 4. Corporate Filings List
+    st.subheader("📚 Corporate 10-K Filings")
+    base_tickers = {"AAPL", "MSFT", "TSLA", "GOOGL", "AMZN"}
     for doc in pipeline.documents:
-        st.caption(f"• **{doc.company}** ({doc.ticker})")
+        if doc.ticker in base_tickers:
+            st.caption(f"• **{doc.company}** ({doc.ticker})")
+
+    # 5. User Uploaded Documents (Displayed separately if uploaded)
+    custom_docs = [d for d in pipeline.documents if d.ticker not in base_tickers]
+    if custom_docs:
+        st.markdown("---")
+        st.subheader("📎 Uploaded Files")
+        for cdoc in custom_docs:
+            st.caption(f"• **{cdoc.company}** ({len(cdoc.sections)} sections)")
+        if st.button("🗑️ Reset Uploads", use_container_width=True, help="Remove uploaded files and reset corpus"):
+            # Clear upload directory files
+            for f in UPLOADS_DIR.glob("*"):
+                try:
+                    f.unlink()
+                except Exception:
+                    pass
+            st.cache_resource.clear()
+            st.rerun()
 
 # ----------------------------------------------------------------------------
 # Main Page: Conversational Chat Interface
