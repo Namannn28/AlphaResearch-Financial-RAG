@@ -11,6 +11,15 @@ from dotenv import load_dotenv
 # Base directory paths
 BASE_DIR = Path(__file__).resolve().parent.parent
 load_dotenv(BASE_DIR / ".env")
+
+# Try loading from Streamlit secrets if deployed on Streamlit Cloud
+try:
+    import streamlit as st
+    if hasattr(st, "secrets") and "GROQ_API_KEY" in st.secrets and not os.getenv("GROQ_API_KEY"):
+        os.environ["GROQ_API_KEY"] = st.secrets["GROQ_API_KEY"]
+except Exception:
+    pass
+
 DATA_DIR = BASE_DIR / "data"
 REPORTS_DIR = DATA_DIR / "financial_reports"
 EVAL_DIR = DATA_DIR / "evaluation"

@@ -99,6 +99,8 @@ with st.sidebar:
     api_key_input = ""
     if "Groq" in provider_choice:
         default_groq = os.getenv("GROQ_API_KEY", "")
+        if not default_groq and hasattr(st, "secrets") and "GROQ_API_KEY" in st.secrets:
+            default_groq = st.secrets["GROQ_API_KEY"]
         api_key_input = st.text_input("Groq Free API Key", type="password", value=default_groq, placeholder="Paste key from console.groq.com/keys")
         st.caption("🔑 Free key available at [console.groq.com/keys](https://console.groq.com/keys)")
 
