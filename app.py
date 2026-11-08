@@ -81,6 +81,11 @@ with st.sidebar:
     st.image("https://img.icons8.com/fluency/96/bullish.png", width=64)
     st.title("AlphaResearch RAG")
     st.caption("SEC 10-K & PDF Intelligence Engine")
+    
+    if st.button("🔄 Start New Chat Session", use_container_width=True, help="Reset session conversation history"):
+        st.session_state.chat_messages = []
+        st.rerun()
+
     st.markdown("---")
 
     st.subheader("🔑 LLM Settings")
@@ -137,77 +142,126 @@ tab1, tab2, tab3, tab4 = st.tabs([
 ])
 
 # ============================================================================
-# TAB 1: Financial & PDF Q&A
+# TAB 1: Conversational Financial & PDF Q&A (Session-Specific History)
 # ============================================================================
 with tab1:
-    st.header("Financial Intelligence & Document Verification")
-    st.markdown("Query SEC 10-K annual reports or your uploaded PDFs with citations, hybrid search, and hallucination refusal guardrails.")
+    # Initialize session chat history (refreshed / reset per browser session)
+    if "chat_messages" not in st.session_state:
+        st.session_state.chat_messages = []
 
-    col_q1, col_q2 = st.columns([3, 1])
-    with col_q1:
-        sample_queries = [
-            "Select an example prompt...",
+    header_col, action_col = st.columns([4, 1])
+    with header_col:
+        st.header("Financial Intelligence & Conversational RAG")
+        st.caption("Chat with SEC 10-K annual reports and uploaded PDFs. History is maintained for this active session only.")
+    with action_col:
+        if st.button("🗑️ New Chat", use_container_width=True, help="Reset session history and start fresh"):
+            st.session_state.chat_messages = []
+            st.rerun()
+
+    # Document filter and quick prompt chips
+    filter_col, example_col = st.columns([1, 2])
+    with filter_col:
+        doc_names = ["All Documents"] + [f"{d.company} ({d.ticker})" for d in pipeline.documents]
+        filter_doc = st.selectbox("Document Filter:", options=doc_names, key="chat_doc_filter")
+        filter_val = None if filter_doc == "All Documents" else filter_doc.split()[0]
+
+    with example_col:
+        sample_prompts = [
+            "Quick Prompts...",
             "What was Apple's total net sales and iPhone revenue in fiscal 2023?",
             "How much revenue did Microsoft's Intelligent Cloud segment produce in FY23?",
             "What was Tesla's gross margin and why did operating income decline?",
-            "How much did Alphabet invest in R&D in 2023, and what were the focal areas?",
             "What portion of Amazon's total operating income came from AWS in 2023?",
-            "[Adversarial Trap] What was Apple's revenue from flying autonomous vehicles in 2023?",
             "[Adversarial Trap] What was Tesla's commercial airline passenger revenue in 2023?"
         ]
-        selected_sample = st.selectbox("Quick Questions / Evaluation Traps:", sample_queries)
+        picked_sample = st.selectbox("Sample Inquiries & Traps:", sample_prompts, key="sample_prompt_selector")
 
-    with col_q2:
-        doc_names = ["All Documents"] + [f"{d.company} ({d.ticker})" for d in pipeline.documents]
-        filter_doc = st.selectbox("Filter Document", options=doc_names)
-        filter_val = None if filter_doc == "All Documents" else filter_doc.split()[0]
+    # If user selected an example prompt, set it as pending prompt
+    pending_prompt = None
+    if picked_sample != "Quick Prompts...":
+        pending_prompt = picked_sample
 
-    default_text = "" if selected_sample == "Select an example prompt..." else selected_sample
-    user_query = st.text_input("Enter your financial or document inquiry:", value=default_text, placeholder="e.g. What was Apple's total net sales and iPhone revenue in fiscal 2023?")
+    st.markdown("---")
 
-    if st.button("Analyze Documents", type="primary"):
-        if not user_query.strip():
-            st.warning("Please enter a question to analyze.")
-        else:
-            with st.spinner("Executing Hybrid Retrieval and LangChain ChatGroq Generation..."):
+    # Render Active Session Chat History
+    for msg in st.session_state.chat_messages:
+        with st.chat_message(msg["role"]):
+            if msg.get("is_refusal"):
+                st.markdown(f"<div class='refusal-box'>{msg['content']}</div>", unsafe_allow_html=True)
+            else:
+                st.markdown(msg["content"])
+
+            if msg.get("citations"):
+                citation_html = "".join([f"<span class='citation-tag'>📄 {c}</span>" for c in msg["citations"]])
+                st.markdown(citation_html, unsafe_allow_html=True)
+
+            if "confidence" in msg:
+                st.caption(
+                    f"Confidence: **{msg['confidence']:.2f}** | "
+                    f"Latency: **{msg.get('latency_ms', 0):.1f} ms** | "
+                    f"Engine: `{msg.get('provider', '')}`"
+                )
+
+            if msg.get("chunks"):
+                with st.expander("🔍 Retrieved Passage Excerpts"):
+                    for idx, hit in enumerate(msg["chunks"], start=1):
+                        chk = hit["chunk"]
+                        st.markdown(f"**Chunk [{idx}] | {chk.company} ({chk.ticker}) - {chk.section_title}**")
+                        st.caption(f"Score: {hit['score']:.3f} | Page: {chk.page_number}")
+                        st.text(chk.text[:350] + ("..." if len(chk.text) > 350 else ""))
+
+    # Accept new chat input from user
+    chat_input_val = st.chat_input("Ask a question about the financial filings or uploaded document...")
+    active_query = chat_input_val or pending_prompt
+
+    if active_query:
+        # 1. Append and display User Message
+        st.session_state.chat_messages.append({"role": "user", "content": active_query})
+        with st.chat_message("user"):
+            st.markdown(active_query)
+
+        # 2. Execute RAG Pipeline with Active Session History
+        with st.chat_message("assistant"):
+            with st.spinner("Retrieving grounded excerpts & generating answer via LangChain ChatGroq..."):
                 t_start = time.perf_counter()
-                result = pipeline.query(user_query, filter_company=filter_val, top_k=3)
-                elapsed_total = (time.perf_counter() - t_start) * 1000.0
+                result = pipeline.query(
+                    active_query,
+                    filter_company=filter_val,
+                    top_k=3,
+                    conversation_history=st.session_state.chat_messages[:-1]
+                )
+                elapsed_ms = (time.perf_counter() - t_start) * 1000.0
 
-            # Metric telemetry row
-            m1, m2, m3, m4 = st.columns(4)
-            with m1:
-                st.metric("Top Confidence Score", f"{result['top_confidence']:.2f}")
-            with m2:
-                st.metric("Retrieval Latency", f"{result['retrieval_latency_ms']:.1f} ms")
-            with m3:
-                st.metric("Total Query Latency", f"{elapsed_total:.1f} ms")
-            with m4:
-                st.metric("Engine Backend", result["provider_used"])
-
-            st.markdown("---")
-
-            # Answer Output
-            st.subheader("💡 Grounded Analysis")
             if result["is_refusal"]:
                 st.markdown(f"<div class='refusal-box'>{result['answer']}</div>", unsafe_allow_html=True)
             else:
                 st.markdown(result["answer"])
 
-            # Citations
             if result.get("citations"):
-                st.markdown("#### 📚 Verified Source Citations")
                 citation_html = "".join([f"<span class='citation-tag'>📄 {c}</span>" for c in result["citations"]])
                 st.markdown(citation_html, unsafe_allow_html=True)
 
-            # Inspect Retrieved Chunks Accordion
-            with st.expander("🔍 Inspect Retrieved Chunks & Rank Shifts"):
-                for idx, hit in enumerate(result["retrieved_chunks"], start=1):
-                    chunk = hit["chunk"]
-                    st.markdown(f"**Chunk [{idx}] | {chunk.company} ({chunk.ticker}) - {chunk.section_title}**")
-                    st.caption(f"Confidence Score: {hit['score']:.3f} | Page: {chunk.page_number} | Original Rank: {hit.get('original_rank', 'N/A')} | Rank Shift: {hit.get('rank_lift', 0):+d}")
-                    st.text(chunk.text)
-                    st.markdown("---")
+            st.caption(
+                f"Confidence: **{result['top_confidence']:.2f}** | "
+                f"Latency: **{elapsed_ms:.1f} ms** | "
+                f"Engine: `{result['provider_used']}`"
+            )
+
+            # Store assistant response in session history
+            st.session_state.chat_messages.append({
+                "role": "assistant",
+                "content": result["answer"],
+                "is_refusal": result["is_refusal"],
+                "citations": result.get("citations", []),
+                "confidence": result["top_confidence"],
+                "latency_ms": elapsed_ms,
+                "provider": result["provider_used"],
+                "chunks": result.get("retrieved_chunks", [])
+            })
+
+            if pending_prompt:
+                # Reset picker to prevent repeat invocation
+                st.rerun()
 
 # ============================================================================
 # TAB 2: Multi-Company Comparison

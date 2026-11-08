@@ -40,7 +40,7 @@ load_dotenv(Path(__file__).resolve().parent.parent / ".env")
 # LangChain Imports for Groq Cloud
 try:
     from langchain_groq import ChatGroq
-    from langchain_core.messages import SystemMessage, HumanMessage
+    from langchain_core.messages import SystemMessage, HumanMessage, AIMessage
     HAS_LANGCHAIN_GROQ = True
 except ImportError:
     HAS_LANGCHAIN_GROQ = False
@@ -108,11 +108,13 @@ CRITICAL INSTRUCTIONS:
         query: str,
         retrieved_chunks: List[Dict[str, Any]],
         confidence_score: float,
-        confidence_threshold: float = 0.28
+        confidence_threshold: float = 0.28,
+        conversation_history: Optional[List[Dict[str, Any]]] = None
     ) -> Dict[str, Any]:
         """
         Synthesizes grounded response from retrieved chunks using LangChain ChatGroq.
         Triggers explicit safety refusal if confidence is below threshold.
+        Maintains conversational history for the active session.
         """
         # Guardrail Refusal Check
         if not retrieved_chunks or confidence_score < confidence_threshold:
@@ -153,10 +155,18 @@ Provide a concise, professional financial analysis answering the question, with 
                         self._init_langchain_groq()
 
                     if self._groq_chat_model is not None:
-                        messages = [
-                            SystemMessage(content=self.SYSTEM_PROMPT),
-                            HumanMessage(content=user_prompt)
-                        ]
+                        messages = [SystemMessage(content=self.SYSTEM_PROMPT)]
+                        if conversation_history:
+                            # Append recent turns from this active session only
+                            for turn in conversation_history[-6:]:
+                                role = turn.get("role")
+                                text = turn.get("content", "")
+                                if role == "user":
+                                    messages.append(HumanMessage(content=text))
+                                elif role == "assistant" and not turn.get("is_refusal", False):
+                                    messages.append(AIMessage(content=text))
+
+                        messages.append(HumanMessage(content=user_prompt))
                         response = self._groq_chat_model.invoke(messages)
                         answer = response.content.strip()
                         model_name = getattr(self, "active_model_name", "ChatGroq")

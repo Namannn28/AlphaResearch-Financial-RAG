@@ -133,14 +133,15 @@ class FinancialRAGPipeline:
         self,
         question: str,
         filter_company: Optional[str] = None,
-        top_k: int = 3
+        top_k: int = 3,
+        conversation_history: Optional[List[Dict[str, Any]]] = None
     ) -> Dict[str, Any]:
         """
         Executes end-to-end query workflow:
         1. Hybrid retrieval (Dense + BM25)
         2. Cross-Encoder reranking
         3. Confidence assessment & refusal guardrail
-        4. Multi-chunk LangChain Groq synthesis with citations
+        4. Multi-chunk LangChain Groq synthesis with citations and session history
         """
         if not self.is_indexed:
             self.load_and_index()
@@ -177,13 +178,14 @@ class FinancialRAGPipeline:
         # Step 3: Top confidence
         top_confidence = final_hits[0]["score"] if final_hits else 0.0
 
-        # Step 4: Multi-chunk Answer generation
+        # Step 4: Multi-chunk Answer generation with session conversation history
         generation_start = time.perf_counter()
         gen_result = self.llm_client.generate_answer(
             query=question,
             retrieved_chunks=final_hits,
             confidence_score=top_confidence,
-            confidence_threshold=config.confidence_threshold
+            confidence_threshold=config.confidence_threshold,
+            conversation_history=conversation_history
         )
         generation_latency_ms = (time.perf_counter() - generation_start) * 1000.0
 

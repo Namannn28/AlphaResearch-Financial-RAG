@@ -274,7 +274,7 @@ def main():
             elif cmd == "history":
                 engine.print_history()
                 continue
-            elif cmd == "clear":
+            elif cmd in ["clear", "new"]:
                 engine.reset_history()
                 continue
             elif cmd == "prompt":
