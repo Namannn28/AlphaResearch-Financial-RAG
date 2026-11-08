@@ -1,43 +1,34 @@
 """
 ==============================================================================
-Financial Research Assistant RAG - Streamlit Web Application
+AlphaResearch | AI Financial Analyst - Streamlit Application
 ==============================================================================
-Interactive Dashboard for SEC 10-K Financial Disclosures & PDF Querying
-Features:
-1. Financial Q&A with Citations, Confidence Scoring, and Refusal Guardrails
-2. Cross-Company Comparative Financial Matrix (Apple, Microsoft, Tesla, etc.)
-3. Document & Chunk Inspector with drag-and-drop PDF file uploader
-4. Quantitative RAG Architecture & Benchmarking Metrics
+A clean, single-page conversational RAG interface:
+- Interactive multi-turn chat stream
+- One-click "New Chat" session reset
+- Drag-and-drop PDF / Document uploader
+- Grounded citations & confidence guardrails
 ==============================================================================
 """
 
 import streamlit as st
 import time
 from pathlib import Path
-import pandas as pd
 import os
 
 from src.config import config, REPORTS_DIR
 from src.pipeline import FinancialRAGPipeline
 
-# Page setup
+# Page Configuration
 st.set_page_config(
-    page_title="AlphaResearch | Financial & PDF RAG",
+    page_title="AlphaResearch | AI Financial Analyst",
     page_icon="📈",
     layout="wide",
     initial_sidebar_state="expanded"
 )
 
-# Custom Styling
+# Custom Clean Styling
 st.markdown("""
 <style>
-    .metric-card {
-        background-color: #f8f9fa;
-        border-radius: 8px;
-        padding: 16px;
-        border-left: 5px solid #2b5c8f;
-        margin-bottom: 12px;
-    }
     .citation-tag {
         display: inline-block;
         background-color: #e9ecef;
@@ -53,19 +44,19 @@ st.markdown("""
         background-color: #fff3cd;
         color: #856404;
         border: 1px solid #ffeeba;
-        padding: 14px;
+        padding: 12px;
         border-radius: 6px;
         font-weight: 500;
     }
 </style>
 """, unsafe_allow_html=True)
 
-# Cache pipeline instance in session state
-@st.cache_resource(show_spinner="Indexing SEC 10-K Financial Filings & Documents...")
-def get_pipeline(use_hybrid=True, use_reranker=True):
+# Cache Pipeline Instance
+@st.cache_resource(show_spinner="Initializing AI Financial Analyst & Documents...")
+def get_pipeline():
     pipe = FinancialRAGPipeline(
-        use_hybrid=use_hybrid,
-        use_reranker=use_reranker,
+        use_hybrid=True,
+        use_reranker=True,
         prefer_neural=True,
         llm_provider="groq"
     )
@@ -74,36 +65,57 @@ def get_pipeline(use_hybrid=True, use_reranker=True):
 
 pipeline = get_pipeline()
 
+# Session State for Active Chat History
+if "chat_messages" not in st.session_state:
+    st.session_state.chat_messages = []
+
 # ----------------------------------------------------------------------------
-# Sidebar Configuration
+# Sidebar: Controls, Uploads & Settings
 # ----------------------------------------------------------------------------
 with st.sidebar:
-    st.image("https://img.icons8.com/fluency/96/bullish.png", width=64)
-    st.title("AlphaResearch RAG")
-    st.caption("SEC 10-K & PDF Intelligence Engine")
-    
-    if st.button("🔄 Start New Chat Session", use_container_width=True, help="Reset session conversation history"):
+    st.title("📈 AlphaResearch")
+    st.caption("AI Financial Analyst Assistant")
+
+    # 1. New Chat Button
+    if st.button("🔄 Start New Chat", use_container_width=True, type="primary"):
         st.session_state.chat_messages = []
         st.rerun()
 
     st.markdown("---")
 
-    st.subheader("🔑 LLM Settings")
-    provider_choice = st.selectbox(
-        "Generation Backend",
-        options=["LangChain ChatGroq (Free API)", "Offline Grounded Engine"],
-        index=0,
-        help="Integrate LangChain ChatGroq with your free Groq API key, or use the offline grounded engine."
+    # 2. Upload Document
+    st.subheader("📤 Upload Document")
+    uploaded_file = st.file_uploader(
+        "Drag & drop PDF or text report",
+        type=["pdf", "md", "txt"],
+        help="Upload any financial filing or document to query it live."
     )
+    if uploaded_file is not None:
+        save_path = REPORTS_DIR / uploaded_file.name
+        if not save_path.exists():
+            with open(save_path, "wb") as f:
+                f.write(uploaded_file.getbuffer())
+            added_chunks = pipeline.add_document(save_path)
+            st.success(f"✅ Indexed '{uploaded_file.name}' (+{added_chunks} chunks)!")
+            time.sleep(1)
+            st.rerun()
+        else:
+            st.info(f"'{uploaded_file.name}' is indexed and ready.")
 
-    api_key_input = ""
-    if "Groq" in provider_choice:
-        default_groq = os.getenv("GROQ_API_KEY", "")
-        if not default_groq and hasattr(st, "secrets") and "GROQ_API_KEY" in st.secrets:
-            default_groq = st.secrets["GROQ_API_KEY"]
-        api_key_input = st.text_input("Groq Free API Key", type="password", value=default_groq, placeholder="Paste key from console.groq.com/keys")
-        st.caption("🔑 Free key available at [console.groq.com/keys](https://console.groq.com/keys)")
+    st.markdown("---")
 
+    # 3. LLM API Key Settings
+    st.subheader("🔑 Groq API Key")
+    default_groq = os.getenv("GROQ_API_KEY", "")
+    if not default_groq and hasattr(st, "secrets") and "GROQ_API_KEY" in st.secrets:
+        default_groq = st.secrets["GROQ_API_KEY"]
+
+    api_key_input = st.text_input(
+        "API Key (Free at console.groq.com)",
+        type="password",
+        value=default_groq,
+        placeholder="Paste gsk_... key here"
+    )
     if api_key_input:
         pipeline.llm_client.set_keys(groq_key=api_key_input)
         pipeline.llm_client.provider = "groq"
@@ -111,303 +123,109 @@ with st.sidebar:
         pipeline.llm_client.provider = "offline"
 
     st.markdown("---")
-    st.subheader("📤 Upload Custom PDF / Report")
-    sidebar_pdf = st.file_uploader("Drag and drop PDF report here", type=["pdf", "md", "txt"], key="sidebar_uploader")
-    if sidebar_pdf is not None:
-        save_path = REPORTS_DIR / sidebar_pdf.name
-        if not save_path.exists():
-            with open(save_path, "wb") as f:
-                f.write(sidebar_pdf.getbuffer())
-            new_chunks = pipeline.add_document(save_path)
-            st.success(f"✅ Indexed {sidebar_pdf.name} (+{new_chunks} chunks)!")
-            time.sleep(1)
-            st.rerun()
-        else:
-            st.info(f"'{sidebar_pdf.name}' is already indexed in the corpus.")
 
-    st.markdown("---")
-    st.subheader("⚙️ Retrieval Architecture")
-    threshold = st.slider("Confidence Refusal Threshold", min_value=0.15, max_value=0.50, value=0.28, step=0.01,
-                          help="Triggers safe refusal when maximum retrieval confidence is below this value.")
-    config.confidence_threshold = threshold
-
-    st.caption(f"Corpus: {len(pipeline.documents)} documents | {len(pipeline.chunks)} chunks")
+    # 4. Indexed Documents List
+    st.subheader("📚 Available Documents")
+    for doc in pipeline.documents:
+        st.caption(f"• **{doc.company}** ({doc.ticker})")
 
 # ----------------------------------------------------------------------------
-# Main Navigation Tabs
+# Main Page: Conversational Chat Interface
 # ----------------------------------------------------------------------------
-tab1, tab2, tab3, tab4 = st.tabs([
-    "💬 Financial & PDF Q&A",
-    "⚖️ Cross-Company Comparison",
-    "📂 Document & Chunk Explorer",
-    "📊 Benchmarking & Architecture"
-])
-
-# ============================================================================
-# TAB 1: Conversational Financial & PDF Q&A (Session-Specific History)
-# ============================================================================
-with tab1:
-    # Initialize session chat history (refreshed / reset per browser session)
-    if "chat_messages" not in st.session_state:
+header_col1, header_col2 = st.columns([5, 1])
+with header_col1:
+    st.title("Financial Intelligence Assistant")
+    st.markdown("Ask quantitative or analytical questions about SEC 10-K filings and your uploaded documents.")
+with header_col2:
+    if st.button("🗑️ Clear Chat", use_container_width=True):
         st.session_state.chat_messages = []
+        st.rerun()
 
-    header_col, action_col = st.columns([4, 1])
-    with header_col:
-        st.header("Financial Intelligence & Conversational RAG")
-        st.caption("Chat with SEC 10-K annual reports and uploaded PDFs. History is maintained for this active session only.")
-    with action_col:
-        if st.button("🗑️ New Chat", use_container_width=True, help="Reset session history and start fresh"):
-            st.session_state.chat_messages = []
-            st.rerun()
+# Quick Prompt Suggestions (Chips)
+st.caption("Quick suggestions to try:")
+quick_col1, quick_col2, quick_col3, quick_col4 = st.columns(4)
+suggested_prompt = None
 
-    # Document filter and quick prompt chips
-    filter_col, example_col = st.columns([1, 2])
-    with filter_col:
-        doc_names = ["All Documents"] + [f"{d.company} ({d.ticker})" for d in pipeline.documents]
-        filter_doc = st.selectbox("Document Filter:", options=doc_names, key="chat_doc_filter")
-        filter_val = None if filter_doc == "All Documents" else filter_doc.split()[0]
+with quick_col1:
+    if st.button("Apple Net Sales & iPhone", use_container_width=True):
+        suggested_prompt = "What was Apple's total net sales and iPhone revenue in fiscal 2023?"
+with quick_col2:
+    if st.button("Microsoft Cloud Revenue", use_container_width=True):
+        suggested_prompt = "How much revenue did Microsoft Intelligent Cloud produce in FY23?"
+with quick_col3:
+    if st.button("Tesla Gross Margin", use_container_width=True):
+        suggested_prompt = "What was Tesla's gross margin and why did operating income decline?"
+with quick_col4:
+    if st.button("Amazon AWS Profit", use_container_width=True):
+        suggested_prompt = "What portion of Amazon's total operating profit came from AWS in 2023?"
 
-    with example_col:
-        sample_prompts = [
-            "Quick Prompts...",
-            "What was Apple's total net sales and iPhone revenue in fiscal 2023?",
-            "How much revenue did Microsoft's Intelligent Cloud segment produce in FY23?",
-            "What was Tesla's gross margin and why did operating income decline?",
-            "What portion of Amazon's total operating income came from AWS in 2023?",
-            "[Adversarial Trap] What was Tesla's commercial airline passenger revenue in 2023?"
-        ]
-        picked_sample = st.selectbox("Sample Inquiries & Traps:", sample_prompts, key="sample_prompt_selector")
+st.markdown("---")
 
-    # If user selected an example prompt, set it as pending prompt
-    pending_prompt = None
-    if picked_sample != "Quick Prompts...":
-        pending_prompt = picked_sample
+# Render Conversation Stream
+for msg in st.session_state.chat_messages:
+    with st.chat_message(msg["role"]):
+        if msg.get("is_refusal"):
+            st.markdown(f"<div class='refusal-box'>{msg['content']}</div>", unsafe_allow_html=True)
+        else:
+            st.markdown(msg["content"])
 
-    st.markdown("---")
+        if msg.get("citations"):
+            citation_html = "".join([f"<span class='citation-tag'>📄 {c}</span>" for c in msg["citations"]])
+            st.markdown(citation_html, unsafe_allow_html=True)
 
-    # Render Active Session Chat History
-    for msg in st.session_state.chat_messages:
-        with st.chat_message(msg["role"]):
-            if msg.get("is_refusal"):
-                st.markdown(f"<div class='refusal-box'>{msg['content']}</div>", unsafe_allow_html=True)
-            else:
-                st.markdown(msg["content"])
-
-            if msg.get("citations"):
-                citation_html = "".join([f"<span class='citation-tag'>📄 {c}</span>" for c in msg["citations"]])
-                st.markdown(citation_html, unsafe_allow_html=True)
-
-            if "confidence" in msg:
-                st.caption(
-                    f"Confidence: **{msg['confidence']:.2f}** | "
-                    f"Latency: **{msg.get('latency_ms', 0):.1f} ms** | "
-                    f"Engine: `{msg.get('provider', '')}`"
-                )
-
-            if msg.get("chunks"):
-                with st.expander("🔍 Retrieved Passage Excerpts"):
-                    for idx, hit in enumerate(msg["chunks"], start=1):
-                        chk = hit["chunk"]
-                        st.markdown(f"**Chunk [{idx}] | {chk.company} ({chk.ticker}) - {chk.section_title}**")
-                        st.caption(f"Score: {hit['score']:.3f} | Page: {chk.page_number}")
-                        st.text(chk.text[:350] + ("..." if len(chk.text) > 350 else ""))
-
-    # Accept new chat input from user
-    chat_input_val = st.chat_input("Ask a question about the financial filings or uploaded document...")
-    active_query = chat_input_val or pending_prompt
-
-    if active_query:
-        # 1. Append and display User Message
-        st.session_state.chat_messages.append({"role": "user", "content": active_query})
-        with st.chat_message("user"):
-            st.markdown(active_query)
-
-        # 2. Execute RAG Pipeline with Active Session History
-        with st.chat_message("assistant"):
-            with st.spinner("Retrieving grounded excerpts & generating answer via LangChain ChatGroq..."):
-                t_start = time.perf_counter()
-                result = pipeline.query(
-                    active_query,
-                    filter_company=filter_val,
-                    top_k=3,
-                    conversation_history=st.session_state.chat_messages[:-1]
-                )
-                elapsed_ms = (time.perf_counter() - t_start) * 1000.0
-
-            if result["is_refusal"]:
-                st.markdown(f"<div class='refusal-box'>{result['answer']}</div>", unsafe_allow_html=True)
-            else:
-                st.markdown(result["answer"])
-
-            if result.get("citations"):
-                citation_html = "".join([f"<span class='citation-tag'>📄 {c}</span>" for c in result["citations"]])
-                st.markdown(citation_html, unsafe_allow_html=True)
-
+        if "confidence" in msg and msg.get("confidence") is not None:
             st.caption(
-                f"Confidence: **{result['top_confidence']:.2f}** | "
-                f"Latency: **{elapsed_ms:.1f} ms** | "
-                f"Engine: `{result['provider_used']}`"
+                f"Confidence: **{msg['confidence']:.2f}** | "
+                f"Latency: **{msg.get('latency_ms', 0):.1f} ms** | "
+                f"Engine: `{msg.get('provider', '')}`"
             )
 
-            # Store assistant response in session history
-            st.session_state.chat_messages.append({
-                "role": "assistant",
-                "content": result["answer"],
-                "is_refusal": result["is_refusal"],
-                "citations": result.get("citations", []),
-                "confidence": result["top_confidence"],
-                "latency_ms": elapsed_ms,
-                "provider": result["provider_used"],
-                "chunks": result.get("retrieved_chunks", [])
-            })
+# Accept User Input
+user_input = st.chat_input("Ask a question about financial disclosures or your uploaded file...")
+active_query = user_input or suggested_prompt
 
-            if pending_prompt:
-                # Reset picker to prevent repeat invocation
-                st.rerun()
+if active_query:
+    # 1. Append User Message
+    st.session_state.chat_messages.append({"role": "user", "content": active_query})
+    with st.chat_message("user"):
+        st.markdown(active_query)
 
-# ============================================================================
-# TAB 2: Multi-Company Comparison
-# ============================================================================
-with tab2:
-    st.header("⚖️ Multi-Company Financial Comparison")
-    st.markdown("Cross-sectional comparative financial metrics extracted directly from verified 10-K filings.")
+    # 2. Run Query through RAG Pipeline
+    with st.chat_message("assistant"):
+        with st.spinner("Analyzing verified documents..."):
+            t_start = time.perf_counter()
+            result = pipeline.query(
+                active_query,
+                top_k=3,
+                conversation_history=st.session_state.chat_messages[:-1]
+            )
+            elapsed_ms = (time.perf_counter() - t_start) * 1000.0
 
-    col_c1, col_c2 = st.columns(2)
-    with col_c1:
-        comp_a = st.selectbox("Company A", ["Apple (AAPL)", "Microsoft (MSFT)", "Tesla (TSLA)", "Alphabet (GOOGL)", "Amazon (AMZN)"], index=0)
-    with col_c2:
-        comp_b = st.selectbox("Company B", ["Microsoft (MSFT)", "Apple (AAPL)", "Tesla (TSLA)", "Alphabet (GOOGL)", "Amazon (AMZN)"], index=0)
+        if result["is_refusal"]:
+            st.markdown(f"<div class='refusal-box'>{result['answer']}</div>", unsafe_allow_html=True)
+        else:
+            st.markdown(result["answer"])
 
-    comparison_data = {
-        "Metric": [
-            "Total Net Sales / Revenue",
-            "Gross Margin (%)",
-            "Operating Income",
-            "R&D Spend (FY 2023)",
-            "R&D as % of Revenue",
-            "Capex (AI & Cloud Infrastructure)",
-            "Primary Growth Segment",
-            "Core Disclosed 10-K Risk"
-        ],
-        "Apple (AAPL)": [
-            "$383.29 Billion",
-            "44.1%",
-            "$114.30 Billion",
-            "$29.92 Billion",
-            "7.8%",
-            "$10.96 Billion",
-            "Services ($85.20B, +9.1%)",
-            "Asian supply chain concentration (China/Taiwan) & App Store antitrust scrutiny"
-        ],
-        "Microsoft (MSFT)": [
-            "$211.92 Billion",
-            "68.9%",
-            "$88.52 Billion",
-            "$27.20 Billion",
-            "12.8%",
-            "$31.90 Billion",
-            "Intelligent Cloud / Azure ($87.91B, +17%)",
-            "Cybersecurity & cloud outages; intensive AI GPU capital expenditure monetization"
-        ],
-        "Tesla (TSLA)": [
-            "$96.77 Billion",
-            "18.2%",
-            "$8.89 Billion",
-            "$3.97 Billion",
-            "4.1%",
-            "$8.90 Billion",
-            "Energy Storage ($6.04B, +54%)",
-            "Automotive price competition compressing margins; FSD regulatory inquiries"
-        ],
-        "Alphabet (GOOGL)": [
-            "$307.39 Billion",
-            "56.6%",
-            "$84.29 Billion",
-            "$45.43 Billion",
-            "14.8%",
-            "$32.25 Billion",
-            "Google Cloud ($33.09B, +25.9%, first year profitable)",
-            "Search disruption from conversational AI & DOJ antitrust advertising trials"
-        ],
-        "Amazon (AMZN)": [
-            "$574.78 Billion",
-            "47.0%",
-            "$36.85 Billion",
-            "$85.62 Billion (Tech & Content)",
-            "14.9%",
-            "$48.10 Billion",
-            "AWS ($90.76B, accounting for 66.8% of operating profit)",
-            "Cloud optimization moderating AWS growth; physical logistics regionalization costs"
-        ]
-    }
+        if result.get("citations"):
+            citation_html = "".join([f"<span class='citation-tag'>📄 {c}</span>" for c in result["citations"]])
+            st.markdown(citation_html, unsafe_allow_html=True)
 
-    df_comp = pd.DataFrame(comparison_data)
-    selected_cols = ["Metric", comp_a, comp_b]
-    st.table(df_comp[selected_cols].set_index("Metric"))
+        st.caption(
+            f"Confidence: **{result['top_confidence']:.2f}** | "
+            f"Latency: **{elapsed_ms:.1f} ms** | "
+            f"Engine: `{result['provider_used']}`"
+        )
 
-    st.info("💡 **Key Takeaway**: While Amazon generated the highest gross sales ($574.8B), Microsoft maintained the highest gross profit margin (68.9%) and Alphabet invested the most raw dollars in foundational R&D ($45.4B).")
+        # Store in session state
+        st.session_state.chat_messages.append({
+            "role": "assistant",
+            "content": result["answer"],
+            "is_refusal": result["is_refusal"],
+            "citations": result.get("citations", []),
+            "confidence": result["top_confidence"],
+            "latency_ms": elapsed_ms,
+            "provider": result["provider_used"]
+        })
 
-# ============================================================================
-# TAB 3: Document & Chunk Explorer
-# ============================================================================
-with tab3:
-    st.header("📂 Document & Chunk Explorer")
-    st.markdown("Inspect how the section-aware financial chunker structures filings and uploaded PDFs into discrete searchable units.")
-
-    c_left, c_right = st.columns([1, 2])
-    with c_left:
-        st.subheader("Indexed Documents")
-        for doc in pipeline.documents:
-            st.markdown(f"📄 **{doc.company}** (`{doc.ticker}`) - *{doc.fiscal_year}*")
-            st.caption(f"Sections: {len(doc.sections)} | File: `{doc.doc_id}`")
-
-        st.markdown("---")
-        st.subheader("Upload PDF or Report")
-        uploaded_doc = st.file_uploader("Upload .pdf, .md, or .txt report", type=["pdf", "md", "txt"], key="tab3_uploader")
-        if uploaded_doc is not None:
-            save_dest = REPORTS_DIR / uploaded_doc.name
-            if not save_dest.exists():
-                with open(save_dest, "wb") as f:
-                    f.write(uploaded_doc.getbuffer())
-                added = pipeline.add_document(save_dest)
-                st.success(f"Indexed {uploaded_doc.name} (+{added} chunks)!")
-                time.sleep(1)
-                st.rerun()
-
-    with c_right:
-        st.subheader("Chunk Inspector")
-        doc_options = [d.company for d in pipeline.documents]
-        company_sel = st.selectbox("View chunks for:", doc_options)
-        selected_chunks = [c for c in pipeline.chunks if c.company == company_sel]
-        st.write(f"Total Chunks for {company_sel}: **{len(selected_chunks)}**")
-
-        for i, c in enumerate(selected_chunks):
-            with st.expander(f"Chunk {i+1}: {c.section_title} (~{c.token_count_approx} tokens)"):
-                st.code(c.text, language="markdown")
-
-# ============================================================================
-# TAB 4: Benchmarking & Architecture
-# ============================================================================
-with tab4:
-    st.header("📊 Quantitative Evaluation & Architecture")
-    st.markdown("""
-    Unlike tutorial clones with zero validation, **AlphaResearch** is evaluated across a 29-question benchmark
-    measuring **Hit Rate@1**, **Recall@3**, **MRR@5**, and **Out-of-Corpus Refusal Accuracy**.
-    """)
-
-    bench_rows = [
-        {"Configuration": "Baseline (Fixed-Window + Dense)", "Hit Rate @ 1": "100.0%", "Recall @ 3": "100.0%", "MRR @ 5": "1.000", "Refusal Accuracy": "0.0% (Hallucinated)", "Avg Latency": "14.2 ms"},
-        {"Configuration": "Section-Aware + Dense", "Hit Rate @ 1": "100.0%", "Recall @ 3": "100.0%", "MRR @ 5": "1.000", "Refusal Accuracy": "0.0% (Hallucinated)", "Avg Latency": "23.5 ms"},
-        {"Configuration": "Section-Aware + Hybrid (BM25+Dense)", "Hit Rate @ 1": "100.0%", "Recall @ 3": "100.0%", "MRR @ 5": "1.000", "Refusal Accuracy": "100.0% (Safe)", "Avg Latency": "13.0 ms"},
-        {"Configuration": "Production (Hybrid + Cross-Encoder)", "Hit Rate @ 1": "87.5%", "Recall @ 3": "100.0%", "MRR @ 5": "0.938", "Refusal Accuracy": "80.0% (Safe)", "Avg Latency": "574.7 ms"}
-    ]
-
-    df_bench = pd.DataFrame(bench_rows).set_index("Configuration")
-    st.table(df_bench)
-
-    st.success("""
-    🎯 **Key Architectural Takeaways**:
-    1. **Hybrid Retrieval Precision**: Combining BM25 exact keyword matching with Dense semantic search achieved **100.0% Recall@3** on financial metrics.
-    2. **Hallucination Prevention**: Without guardrails, baseline models hallucinated 100% of out-of-corpus adversarial trick queries. Our confidence thresholding guardrail rejected them with 100% accuracy.
-    3. **Sub-15ms Speed**: Fast hybrid search produces responses with sub-15ms retrieval latency on standard CPU hardware.
-    """)
+        if suggested_prompt:
+            st.rerun()
