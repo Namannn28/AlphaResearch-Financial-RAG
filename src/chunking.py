@@ -1,6 +1,6 @@
 """
 Document Chunking Module for Financial Research Assistant.
-Compares standard Fixed-Window chunking vs. Section-Aware Financial chunking.
+Section-aware and Page-aware chunking preserving tables and metrics.
 """
 
 from dataclasses import dataclass
@@ -18,15 +18,15 @@ class FinancialChunk:
     section_title: str
     text: str
     token_count_approx: int
+    page_number: int = 1
 
 class SectionAwareFinancialChunker:
     """
-    Chunks financial documents respecting section boundaries (e.g. Item 7 MD&A,
-    Revenue Breakdown, Risk Factors). Ensures financial numbers remain tied
-    to their company context and section title.
+    Chunks financial documents respecting section and page boundaries.
+    Ensures financial metrics and tables remain tied to their company and section.
     """
 
-    def __init__(self, target_chunk_words: int = 250, min_chars: int = 30):
+    def __init__(self, target_chunk_words: int = 250, min_chars: int = 25):
         self.target_chunk_words = target_chunk_words
         self.min_chars = min_chars
 
@@ -37,6 +37,7 @@ class SectionAwareFinancialChunker:
         for sec in document.sections:
             title = sec["title"]
             content = sec["content"]
+            page = sec.get("page", 1)
 
             if len(content.strip()) < self.min_chars:
                 continue
@@ -56,8 +57,9 @@ class SectionAwareFinancialChunker:
                         ticker=document.ticker,
                         fiscal_year=document.fiscal_year,
                         section_title=title,
-                        text=f"[{document.company} ({document.ticker}) | {title}]\n{chunk_text}",
-                        token_count_approx=int(len(chunk_text.split()) * 1.3)
+                        text=f"[{document.company} ({document.ticker}) | {title} | Page {page}]\n{chunk_text}",
+                        token_count_approx=int(len(chunk_text.split()) * 1.3),
+                        page_number=page
                     ))
                     chunk_idx += 1
                     current_buffer = [para]
@@ -75,44 +77,10 @@ class SectionAwareFinancialChunker:
                     ticker=document.ticker,
                     fiscal_year=document.fiscal_year,
                     section_title=title,
-                    text=f"[{document.company} ({document.ticker}) | {title}]\n{chunk_text}",
-                    token_count_approx=int(len(chunk_text.split()) * 1.3)
+                    text=f"[{document.company} ({document.ticker}) | {title} | Page {page}]\n{chunk_text}",
+                    token_count_approx=int(len(chunk_text.split()) * 1.3),
+                    page_number=page
                 ))
                 chunk_idx += 1
-
-        return chunks
-
-
-class FixedWindowChunker:
-    """
-    Standard naive sliding window chunker (used as baseline in evaluation).
-    Splits text blindly without awareness of tables, headers, or company context.
-    """
-
-    def __init__(self, window_size_words: int = 200, overlap_words: int = 40):
-        self.window_size_words = window_size_words
-        self.overlap_words = overlap_words
-
-    def chunk_document(self, document: FinancialDocument) -> List[FinancialChunk]:
-        words = document.raw_content.split()
-        chunks: List[FinancialChunk] = []
-        step = max(1, self.window_size_words - self.overlap_words)
-
-        for i in range(0, len(words), step):
-            window = words[i:i + self.window_size_words]
-            if len(window) < 15:
-                continue
-
-            chunk_text = " ".join(window)
-            chunks.append(FinancialChunk(
-                chunk_id=f"{document.doc_id}_fixed_{len(chunks)}",
-                doc_id=document.doc_id,
-                company=document.company,
-                ticker=document.ticker,
-                fiscal_year=document.fiscal_year,
-                section_title="Fixed Window",
-                text=chunk_text,
-                token_count_approx=int(len(window) * 1.3)
-            ))
 
         return chunks

@@ -1,1 +1,0 @@
-# CandidateFit-RAG Evaluation Suite

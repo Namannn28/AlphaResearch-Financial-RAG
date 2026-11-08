@@ -1,7 +1,7 @@
 """
 Unified End-to-End Pipeline for Financial Research Assistant RAG.
-Orchestrates ingestion, indexing, hybrid retrieval, cross-encoder reranking,
-refusal checks, and citation-backed answer generation.
+Orchestrates PDF/Markdown ingestion, hybrid retrieval, cross-encoder reranking,
+refusal checks, and citation-backed LangChain answer generation.
 """
 
 from typing import List, Dict, Any, Optional
@@ -10,7 +10,7 @@ from pathlib import Path
 
 from src.config import config, REPORTS_DIR
 from src.ingestion import DocumentIngestionEngine, FinancialDocument
-from src.chunking import SectionAwareFinancialChunker, FixedWindowChunker, FinancialChunk
+from src.chunking import SectionAwareFinancialChunker, FinancialChunk
 from src.embeddings import FinancialEmbeddingEngine
 from src.vector_store import FinancialVectorStore
 from src.lexical_search import BM25OkapiRetriever
@@ -19,24 +19,22 @@ from src.reranker import FinancialCrossEncoderReranker
 from src.llm_client import FinancialLLMClient
 
 class FinancialRAGPipeline:
-    """Production Financial RAG Pipeline for Company 10-K Analysis."""
+    """Production Financial RAG Pipeline for SEC 10-K Analysis & PDF Querying."""
 
     def __init__(
         self,
-        use_section_chunker: bool = True,
         use_hybrid: bool = True,
         use_reranker: bool = True,
         prefer_neural: bool = True,
-        llm_provider: str = "mistral"
+        llm_provider: str = "groq"
     ):
-        self.use_section_chunker = use_section_chunker
         self.use_hybrid = use_hybrid
         self.use_reranker = use_reranker
         self.prefer_neural = prefer_neural
 
         # Component Initialization
         self.ingestion_engine = DocumentIngestionEngine()
-        self.chunker = SectionAwareFinancialChunker() if use_section_chunker else FixedWindowChunker()
+        self.chunker = SectionAwareFinancialChunker()
         self.embedding_engine = FinancialEmbeddingEngine(
             model_name=config.embedding_model_name,
             prefer_sentence_transformer=prefer_neural
@@ -54,7 +52,6 @@ class FinancialRAGPipeline:
             enable_neural=prefer_neural
         )
         self.llm_client = FinancialLLMClient(
-            mistral_api_key=config.mistral_api_key,
             groq_api_key=config.groq_api_key,
             provider=llm_provider
         )
@@ -64,7 +61,7 @@ class FinancialRAGPipeline:
         self.is_indexed = False
 
     def load_and_index(self, reports_dir: Optional[Path] = None):
-        """Loads all reports from folder, chunks them, and builds indices."""
+        """Loads all reports (.md, .pdf, .txt) from folder and builds hybrid indices."""
         target_dir = reports_dir or REPORTS_DIR
         self.documents = self.ingestion_engine.load_all_reports(target_dir)
 
@@ -75,7 +72,7 @@ class FinancialRAGPipeline:
 
         self.chunks = all_chunks
 
-        # 1. Index BM25
+        # 1. Index BM25 Lexical
         self.bm25_retriever.index_chunks(self.chunks)
 
         # 2. Index Vector Store
@@ -85,6 +82,33 @@ class FinancialRAGPipeline:
         self.vector_store.add_chunks(self.chunks, embeddings)
 
         self.is_indexed = True
+
+    def add_document(self, file_path: Path) -> int:
+        """
+        Dynamically loads, chunks, and indexes a single new PDF, Markdown, or text file.
+        Returns the number of new chunks added to the index.
+        """
+        new_doc = self.ingestion_engine.load_file(file_path)
+        self.documents.append(new_doc)
+
+        new_chunks = self.chunker.chunk_document(new_doc)
+        if not new_chunks:
+            return 0
+
+        self.chunks.extend(new_chunks)
+
+        # Re-index BM25
+        self.bm25_retriever.index_chunks(self.chunks)
+
+        # Add new vectors to Vector Store
+        new_texts = [c.text for c in new_chunks]
+        new_embeddings = self.embedding_engine.embed_texts(new_texts)
+        if self.vector_store.embeddings is None:
+            self.vector_store.add_chunks(new_chunks, new_embeddings)
+        else:
+            self.vector_store.add_chunks(new_chunks, new_embeddings)
+
+        return len(new_chunks)
 
     def query(
         self,
@@ -97,7 +121,7 @@ class FinancialRAGPipeline:
         1. Hybrid retrieval (Dense + BM25)
         2. Cross-Encoder reranking
         3. Confidence assessment & refusal guardrail
-        4. LLM synthesis with citations
+        4. Multi-chunk LangChain Groq synthesis with citations
         """
         if not self.is_indexed:
             self.load_and_index()
@@ -112,7 +136,6 @@ class FinancialRAGPipeline:
                 filter_company=filter_company
             )
         else:
-            # Dense only baseline
             q_vec = self.embedding_engine.embed_query(question)
             initial_hits = self.vector_store.similarity_search(
                 q_vec,
@@ -135,7 +158,7 @@ class FinancialRAGPipeline:
         # Step 3: Top confidence
         top_confidence = final_hits[0]["score"] if final_hits else 0.0
 
-        # Step 4: Answer generation
+        # Step 4: Multi-chunk Answer generation
         generation_start = time.perf_counter()
         gen_result = self.llm_client.generate_answer(
             query=question,

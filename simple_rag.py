@@ -224,11 +224,17 @@ class FinancialRAG:
             cid = self.chunks[idx].chunk_id
             fused_scores[cid] = fused_scores.get(cid, 0.0) + (1.0 / (60 + rank))
 
-        # Sort top fused chunk
-        best_cid = max(fused_scores.items(), key=lambda x: x[1])[0]
-        best_chunk = next(c for c in self.chunks if c.chunk_id == best_cid)
-        top_idx = next(i for i, c in enumerate(self.chunks) if c.chunk_id == best_cid)
+        # Sort top fused chunks (provide top 3 chunks to LLM context for comprehensive multi-part answers)
+        sorted_cids = sorted(fused_scores.items(), key=lambda x: x[1], reverse=True)[:3]
+        top_chunks = [next(c for c in self.chunks if c.chunk_id == cid) for cid, _ in sorted_cids]
+        best_chunk = top_chunks[0]
+
+        top_idx = next(i for i, c in enumerate(self.chunks) if c.chunk_id == best_chunk.chunk_id)
         confidence = float(dense_scores[top_idx])
+
+        # Combine top chunk excerpts for rich LLM context
+        combined_context = "\n\n---\n\n".join([c.text for c in top_chunks])
+        citation_labels = ", ".join([f"[{c.company} ({c.ticker}) | {c.section_title}]" for c in top_chunks])
 
         # Calculate match ratio of substantive query terms in retrieved chunk
         # If less than 45% of key query terms appear in the chunk, heavily penalize to prevent hallucination
@@ -261,12 +267,12 @@ class FinancialRAG:
             try:
                 from langchain_core.messages import SystemMessage, HumanMessage
                 messages = [
-                    SystemMessage(content="You are a professional financial analyst. Answer the user question using ONLY the provided verified 10-K context, with citations."),
-                    HumanMessage(content=f"Context:\n{best_chunk.text}\n\nQuestion: {query}")
+                    SystemMessage(content="You are a professional financial analyst. Answer the question using ONLY the provided verified 10-K contexts with exact citations and numbers."),
+                    HumanMessage(content=f"Verified 10-K Contexts:\n{combined_context}\n\nQuestion: {query}")
                 ]
                 response = self.chat_model.invoke(messages)
                 answer = response.content.strip()
-                return f"{answer}\n\n*(Citations: [{best_chunk.company} ({best_chunk.ticker}) | {best_chunk.section_title}] | Provider: LangChain ChatGroq (Llama 3.3 70B) | Latency: {latency_ms:.1f}ms)*"
+                return f"{answer}\n\n*(Citations: {citation_labels} | Provider: LangChain ChatGroq | Latency: {latency_ms:.1f}ms)*"
             except Exception:
                 pass  # Fallback to offline extraction
 
