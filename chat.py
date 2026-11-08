@@ -135,74 +135,27 @@ class InteractiveFinancialChatPipeline:
         """Runs a single conversational RAG turn with guardrails, citations, and history."""
         start_time = time.perf_counter()
 
-        # Hybrid Retrieval + Reranking (Top 3-4 chunks)
-        retrieval_res = self.rag_pipeline.query(user_question, top_k=4)
-        top_confidence = retrieval_res["top_confidence"]
-        is_refusal = retrieval_res["is_refusal"]
-        chunks = retrieval_res["retrieved_chunks"]
+        # Hybrid Retrieval + Preprocessing + Reranking + Generation
+        res = self.rag_pipeline.query(
+            question=user_question,
+            top_k=4,
+            conversation_history=self.conversation_history[1:]  # skip system prompt in turn history
+        )
 
-        # Guardrail Refusal Check
-        if is_refusal:
-            refusal_text = retrieval_res["answer"]
-            self.conversation_history.append({"role": "user", "content": user_question})
-            self.conversation_history.append({"role": "assistant", "content": refusal_text})
-            return {
-                "answer": refusal_text,
-                "is_refusal": True,
-                "citations": [],
-                "confidence": top_confidence,
-                "latency_ms": (time.perf_counter() - start_time) * 1000.0,
-                "provider": "GuardrailRefusal"
-            }
+        final_answer = res["answer"]
+        is_refusal = res["is_refusal"]
+        citations = res.get("citations", [])
+        top_confidence = res["top_confidence"]
+        provider_name = res["provider_used"]
+        latency_ms = res["total_latency_ms"]
 
-        # Multi-chunk Context Formatting
-        context_blocks = []
-        citations = []
-        for i, hit in enumerate(chunks, start=1):
-            c = hit["chunk"]
-            citation_str = f"{c.company} ({c.ticker}) | {c.section_title}"
-            citations.append(citation_str)
-            context_blocks.append(f"[Source {i}: {citation_str}]\n{c.text}")
-
-        combined_context = "\n\n".join(context_blocks)
-        augmented_prompt = f"""Verified Document Excerpts:
-{combined_context}
-
-User Question: {user_question}
-
-Provide an accurate, concise answer with exact numbers and document citations:"""
-
-        # Generate with LangChain ChatGroq
-        provider_name = "Offline Grounded Engine"
-        if self.chat_model is not None:
-            try:
-                langchain_messages = [SystemMessage(content=self.system_prompt)]
-                # Add past conversational history
-                for msg in self.conversation_history[1:][-4:]:
-                    if msg["role"] == "user":
-                        langchain_messages.append(HumanMessage(content=msg["content"]))
-                    elif msg["role"] == "assistant":
-                        langchain_messages.append(AIMessage(content=msg["content"]))
-
-                langchain_messages.append(HumanMessage(content=augmented_prompt))
-                response = self.chat_model.invoke(langchain_messages)
-                final_answer = response.content.strip()
-                provider_name = "LangChain ChatGroq (openai/gpt-oss-120b)"
-            except Exception as e:
-                final_answer = retrieval_res["answer"]
-                provider_name = f"Offline Fallback (API error: {e})"
-        else:
-            final_answer = retrieval_res["answer"]
-
-        latency_ms = (time.perf_counter() - start_time) * 1000.0
-
-        # Store in message history dictionary
+        # Store in message history dictionary for this active session
         self.conversation_history.append({"role": "user", "content": user_question})
         self.conversation_history.append({"role": "assistant", "content": final_answer})
 
         return {
             "answer": final_answer,
-            "is_refusal": False,
+            "is_refusal": is_refusal,
             "citations": citations,
             "confidence": top_confidence,
             "latency_ms": latency_ms,

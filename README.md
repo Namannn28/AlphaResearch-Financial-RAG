@@ -122,6 +122,9 @@ streamlit run app.py
 ### 4. Run & Test Individual Pipeline Stages (Great for Interviews)
 Each step can be run on its own to demonstrate component functionality:
 ```bash
+# Step 0: Query Preprocessing, Greetings & Spelling Correction
+python src/query_preprocessor.py
+
 # Step 1: Document Ingestion
 python src/ingestion.py
 
@@ -160,6 +163,7 @@ AlphaResearch-Financial-RAG/
 │   └── financial_reports/       # SEC 10-K filings (Apple, Microsoft, Tesla, Alphabet, Amazon)
 ├── src/                         # Modular Data Science pipeline stages
 │   ├── config.py                # Hyperparameters, paths, and thresholds
+│   ├── query_preprocessor.py    # Step 0: Greetings, small talk & fuzzy typo correction
 │   ├── ingestion.py             # Step 1: Document loader, PDF parser (pypdf), and 10-K metadata
 │   ├── chunking.py              # Step 2: Section-aware chunking preserving tables & headers
 │   ├── embeddings.py            # Step 3A: SentenceTransformers dense vector embeddings

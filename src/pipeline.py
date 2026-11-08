@@ -38,6 +38,7 @@ from src.lexical_search import BM25OkapiRetriever
 from src.hybrid_retriever import HybridFinancialRetriever
 from src.reranker import FinancialCrossEncoderReranker
 from src.llm_client import FinancialLLMClient
+from src.query_preprocessor import QueryPreprocessor, PreprocessedQuery
 
 
 class FinancialRAGPipeline:
@@ -77,6 +78,7 @@ class FinancialRAGPipeline:
             groq_api_key=config.groq_api_key,
             provider=llm_provider
         )
+        self.query_preprocessor = QueryPreprocessor()
 
         self.documents: List[FinancialDocument] = []
         self.chunks: List[FinancialChunk] = []
@@ -138,50 +140,72 @@ class FinancialRAGPipeline:
     ) -> Dict[str, Any]:
         """
         Executes end-to-end query workflow:
+        0. Query preprocessing: greeting detection, typo correction, company routing
         1. Hybrid retrieval (Dense + BM25)
-        2. Cross-Encoder reranking
-        3. Confidence assessment & refusal guardrail
-        4. Multi-chunk LangChain Groq synthesis with citations and session history
+        2. Cross-Encoder reranking & calibrated guardrail
+        3. Multi-chunk LangChain Groq synthesis with citations and session history
         """
+        start_time = time.perf_counter()
+
+        # Step 0: Preprocessing (Greetings, Typos, Company Entity Detection)
+        prep: PreprocessedQuery = self.query_preprocessor.preprocess(question)
+
+        # Handle greetings immediately without refusal
+        if prep.is_greeting:
+            return {
+                "question": question,
+                "answer": prep.greeting_response,
+                "is_refusal": False,
+                "provider_used": "AssistantGreeting",
+                "citations": [],
+                "top_confidence": 1.0,
+                "retrieval_latency_ms": 0.0,
+                "generation_latency_ms": 0.0,
+                "total_latency_ms": (time.perf_counter() - start_time) * 1000.0,
+                "retrieved_chunks": [],
+                "did_you_mean": None
+            }
+
+        active_query = prep.corrected_query
+        target_company = filter_company or prep.detected_company
+
         if not self.is_indexed:
             self.load_and_index()
 
-        start_time = time.perf_counter()
+        retrieval_start = time.perf_counter()
 
         # Step 1: Retrieval
         if self.use_hybrid:
             initial_hits = self.hybrid_retriever.retrieve(
-                query=question,
+                query=active_query,
                 top_k=config.retrieval_top_k,
-                filter_company=filter_company
+                filter_company=target_company
             )
         else:
-            q_vec = self.embedding_engine.embed_query(question)
+            q_vec = self.embedding_engine.embed_query(active_query)
             initial_hits = self.vector_store.similarity_search(
                 q_vec,
                 top_k=config.retrieval_top_k,
-                filter_company=filter_company
+                filter_company=target_company
             )
 
         # Step 2: Reranking
         if self.use_reranker and initial_hits:
             final_hits = self.reranker.rerank(
-                query=question,
+                query=active_query,
                 candidate_hits=initial_hits,
                 top_k=top_k
             )
         else:
             final_hits = initial_hits[:top_k]
 
-        retrieval_latency_ms = (time.perf_counter() - start_time) * 1000.0
-
-        # Step 3: Top confidence
+        retrieval_latency_ms = (time.perf_counter() - retrieval_start) * 1000.0
         top_confidence = final_hits[0]["score"] if final_hits else 0.0
 
-        # Step 4: Multi-chunk Answer generation with session conversation history
+        # Step 3: Multi-chunk Answer generation with session conversation history
         generation_start = time.perf_counter()
         gen_result = self.llm_client.generate_answer(
-            query=question,
+            query=active_query,
             retrieved_chunks=final_hits,
             confidence_score=top_confidence,
             confidence_threshold=config.confidence_threshold,
@@ -189,16 +213,23 @@ class FinancialRAGPipeline:
         )
         generation_latency_ms = (time.perf_counter() - generation_start) * 1000.0
 
+        # If a typo was corrected, prefix answer with "Did you mean...?"
+        final_answer = gen_result["answer"]
+        if prep.did_you_mean and not gen_result["is_refusal"]:
+            final_answer = f"💡 *{prep.did_you_mean}*\n\n{final_answer}"
+
         return {
             "question": question,
-            "answer": gen_result["answer"],
+            "corrected_question": active_query if active_query != question else None,
+            "did_you_mean": prep.did_you_mean,
+            "answer": final_answer,
             "is_refusal": gen_result["is_refusal"],
             "provider_used": gen_result["provider_used"],
             "citations": gen_result["citations"],
             "top_confidence": top_confidence,
             "retrieval_latency_ms": retrieval_latency_ms,
             "generation_latency_ms": generation_latency_ms,
-            "total_latency_ms": retrieval_latency_ms + generation_latency_ms,
+            "total_latency_ms": (time.perf_counter() - start_time) * 1000.0,
             "retrieved_chunks": final_hits
         }
 

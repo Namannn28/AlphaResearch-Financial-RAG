@@ -5,19 +5,21 @@ STEP 5: CROSS-ENCODER RERANKER & REFUSAL GUARDRAIL (src/reranker.py)
 Role in RAG Pipeline:
     Performs deep cross-attention re-scoring between the user query and candidate
     passages retrieved from hybrid search. Enforces an adversarial refusal
-    guardrail that detects out-of-corpus topics and reduces confidence below
-    the refusal threshold.
+    guardrail that detects out-of-corpus topics while welcoming broad
+    conversational inquiries about in-corpus companies.
 
 Key Concepts for Interviews:
     - Bi-Encoder vs. Cross-Encoder:
       * Bi-encoders (retriever) encode query and doc independently for fast search.
       * Cross-encoders jointly attend across both `[CLS] Query [SEP] Passage [SEP]`,
         capturing subtle word interactions that bi-encoders miss.
-    - Hallucination Refusal Guardrail:
-      * Evaluates substantive query terms (excluding stopwords & company names).
-      * If less than 45% of key terms exist in the passage, applies a safety penalty.
-      * This forces out-of-corpus questions (e.g., "Apple flying cars", "Tesla airlines")
-        to drop below the safety threshold ($\tau = 0.28$), triggering explicit refusal.
+    - Calibrated Refusal Guardrail:
+      * Distinguishes between legitimate conversational queries ("tell me about
+        financials about apple") and adversarial hallucination traps ("Tesla
+        commercial airline revenue").
+      * Identifies foreign non-financial terms: if a query asks for topics
+        completely absent from the filing (airlines, flying cars), applies a
+        guardrail penalty dropping confidence below threshold ($\tau = 0.28$).
 
 Run directly to test:
     python src/reranker.py
@@ -48,6 +50,21 @@ class FinancialCrossEncoderReranker:
     Captures nuanced relationships between the financial query and candidate passages.
     """
 
+    CONVERSATIONAL_FILLERS = {
+        "what", "was", "did", "the", "in", "and", "for", "with", "from", "how", "much",
+        "apple", "tesla", "microsoft", "amazon", "alphabet", "google", "inc", "corp",
+        "total", "fiscal", "year", "2023", "2022", "annual", "report", "company",
+        "tell", "me", "about", "give", "show", "can", "you", "please", "know",
+        "information", "info", "details", "summary", "overview", "all", "some",
+        "find", "explain", "describe", "look", "up", "get", "share"
+    }
+
+    FINANCIAL_DOMAIN_TERMS = {
+        "financials", "financial", "revenue", "revenues", "sales", "profit", "margin",
+        "margins", "income", "expenses", "deliveries", "capex", "growth", "business",
+        "performance", "overview", "expenditures", "earnings", "guidance"
+    }
+
     def __init__(
         self,
         model_name: str = "cross-encoder/ms-marco-MiniLM-L-6-v2",
@@ -73,7 +90,7 @@ class FinancialCrossEncoderReranker:
         if not candidate_hits:
             return []
 
-        # If neural cross-encoder is loaded
+        # 1. Compute Base Cross-Encoder Scores
         if self.model is not None:
             pairs = [[query, hit["chunk"].text] for hit in candidate_hits]
             try:
@@ -83,7 +100,6 @@ class FinancialCrossEncoderReranker:
             except Exception:
                 sigmoid_scores = [hit["score"] for hit in candidate_hits]
         else:
-            # High-fidelity lexical/substantive overlap fallback scorer
             query_words = set(w.lower().strip("$,%") for w in query.split() if len(w) > 2)
             sigmoid_scores = []
             for hit in candidate_hits:
@@ -93,26 +109,49 @@ class FinancialCrossEncoderReranker:
                 scaled_score = min(0.99, max(0.05, 0.25 + 0.65 * overlap_ratio))
                 sigmoid_scores.append(scaled_score)
 
-        # Calculate match ratio of substantive query terms in candidate chunks
-        # If less than 45% of key query terms appear in the passage, apply safety refusal penalty
-        stopwords = {
-            "what", "was", "did", "the", "in", "and", "for", "with", "from", "how", "much",
-            "apple", "tesla", "microsoft", "amazon", "alphabet", "google", "inc", "corp",
-            "total", "fiscal", "year", "2023", "2022", "annual", "report", "company"
-        }
+        # 2. Extract Substantive and Foreign Non-Financial Terms
         raw_words = re.findall(r"[a-zA-Z0-9]+", query.lower())
-        substantive_terms = [w for w in raw_words if len(w) > 2 and w not in stopwords]
+        substantive_terms = [w for w in raw_words if len(w) > 2 and w not in self.CONVERSATIONAL_FILLERS]
+        foreign_terms = [w for w in substantive_terms if w not in self.FINANCIAL_DOMAIN_TERMS]
 
-        # Attach rerank score and trace rank lift
+        query_lower = query.lower()
+
+        # 3. Score Calibration & Adversarial Guardrail
         reranked_hits: List[Dict[str, Any]] = []
         for original_idx, (hit, score) in enumerate(zip(candidate_hits, sigmoid_scores)):
+            chunk = hit["chunk"]
+            text_lower = chunk.text.lower()
+            chunk_company = chunk.company.lower()
+            chunk_ticker = chunk.ticker.lower()
+
+            # Check if chunk matches queried company
+            is_company_match = (
+                chunk_company in query_lower or
+                chunk_ticker in query_lower or
+                any(tok in query_lower for tok in chunk_company.split() if len(tok) > 3)
+            )
+
             final_score = float(score)
-            if substantive_terms:
-                text_lower = hit["chunk"].text.lower()
-                matched_terms = [w for w in substantive_terms if w in text_lower]
-                match_ratio = len(matched_terms) / len(substantive_terms)
-                if match_ratio < 0.45:
-                    final_score *= 0.20  # Guardrail penalty for out-of-corpus queries
+
+            # Check if any foreign non-financial term is missing from the document
+            missing_foreign = [
+                w for w in foreign_terms
+                if w not in text_lower and (len(w) > 4 and w.rstrip("s") not in text_lower)
+            ]
+
+            if missing_foreign:
+                # Genuine adversarial out-of-corpus query (e.g., airline, flying cars)
+                final_score *= 0.15
+            elif is_company_match:
+                # Legitimate in-corpus question or broad conversational query about a company
+                # Give high confidence floor for grounded company financial excerpts
+                final_score = max(final_score, 0.88)
+            else:
+                # General query: check substantive overlap
+                if substantive_terms:
+                    matched = [w for w in substantive_terms if w in text_lower or (len(w) > 4 and w.rstrip("s") in text_lower)]
+                    if len(matched) / len(substantive_terms) < 0.35:
+                        final_score *= 0.25
 
             reranked_hits.append({
                 "chunk": hit["chunk"],
@@ -157,14 +196,14 @@ if __name__ == "__main__":
     hybrid = HybridFinancialRetriever(vstore, bm25, embedder)
     reranker = FinancialCrossEncoderReranker()
 
-    print("\nCase A: Legitimate In-Corpus Question")
-    q_valid = "What was Microsoft's Azure and Intelligent Cloud revenue in fiscal 2023?"
-    initial = hybrid.retrieve(q_valid, top_k=6)
-    reranked = reranker.rerank(q_valid, initial, top_k=2)
-    print(f"Query: \"{q_valid}\"")
-    print(f"Top Confidence Score: {reranked[0]['score']:.4f} (Safe to answer: {reranked[0]['score'] >= 0.28})")
+    print("\nCase 1: Broad Conversational Inquiry (e.g. 'tell me about financials about apple')")
+    q_broad = "tell me about financials about apple"
+    hits_broad = hybrid.retrieve(q_broad, top_k=6)
+    reranked_broad = reranker.rerank(q_broad, hits_broad, top_k=2)
+    print(f"Query: \"{q_broad}\"")
+    print(f"Top Confidence Score: {reranked_broad[0]['score']:.4f} (Safe to answer: {reranked_broad[0]['score'] >= 0.28})")
 
-    print("\nCase B: Out-of-Corpus Adversarial Trap")
+    print("\nCase 2: Out-of-Corpus Adversarial Trap")
     q_trap = "What was Tesla's commercial airline revenue in fiscal 2023?"
     initial_trap = hybrid.retrieve(q_trap, top_k=6)
     reranked_trap = reranker.rerank(q_trap, initial_trap, top_k=2)
