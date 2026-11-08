@@ -2,11 +2,11 @@
 ==============================================================================
 AlphaResearch | AI Financial Analyst - Streamlit Application
 ==============================================================================
-A clean, single-page conversational RAG interface:
-- Interactive multi-turn chat stream
-- One-click "New Chat" session reset
-- Drag-and-drop PDF / Document uploader
-- Grounded citations & confidence guardrails
+Clean single-page conversational interface:
+- Document uploader placed directly in the chat interface
+- Session-isolated document uploads (uploaded files are visible ONLY to you)
+- Groq API key box removed from sidebar (loaded securely in background)
+- Sidebar dedicated exclusively to your session's uploaded files & New Chat
 ==============================================================================
 """
 
@@ -14,11 +14,15 @@ import streamlit as st
 import time
 from pathlib import Path
 import os
+import numpy as np
 
-from src.config import config, REPORTS_DIR, UPLOADS_DIR
+from src.config import config, REPORTS_DIR
 from src.pipeline import FinancialRAGPipeline
+from src.vector_store import FinancialVectorStore
+from src.lexical_search import BM25OkapiRetriever
+from src.hybrid_retriever import HybridFinancialRetriever
 
-# Page Configuration
+# Page Setup
 st.set_page_config(
     page_title="AlphaResearch | AI Financial Analyst",
     page_icon="📈",
@@ -26,7 +30,7 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-# Custom Clean Styling
+# Custom Styling
 st.markdown("""
 <style>
     .citation-tag {
@@ -48,12 +52,20 @@ st.markdown("""
         border-radius: 6px;
         font-weight: 500;
     }
+    .upload-card {
+        background-color: #f8f9fa;
+        border: 1px dashed #ced4da;
+        border-radius: 8px;
+        padding: 12px 16px;
+        margin-bottom: 16px;
+    }
 </style>
 """, unsafe_allow_html=True)
 
-# Cache Pipeline Instance
-@st.cache_resource(show_spinner="Initializing AI Financial Analyst & Documents...")
-def get_pipeline():
+
+# 1. Base Corporate Pipeline (Pre-indexed once & shared globally across users)
+@st.cache_resource(show_spinner="Loading Corporate 10-K Filings & AI Models...")
+def get_base_pipeline():
     pipe = FinancialRAGPipeline(
         use_hybrid=True,
         use_reranker=True,
@@ -63,119 +75,169 @@ def get_pipeline():
     pipe.load_and_index(REPORTS_DIR)
     return pipe
 
-pipeline = get_pipeline()
+base_pipeline = get_base_pipeline()
 
-# Session State for Active Chat History
+
+# 2. Session-Specific Pipeline Factory (Private & Isolated to each user's browser session)
+def create_session_pipeline(base: FinancialRAGPipeline) -> FinancialRAGPipeline:
+    """Clones pipeline state so any uploaded files are 100% private to this session."""
+    session_pipe = FinancialRAGPipeline.__new__(FinancialRAGPipeline)
+    session_pipe.use_hybrid = True
+    session_pipe.use_reranker = True
+    session_pipe.prefer_neural = True
+    session_pipe.ingestion_engine = base.ingestion_engine
+    session_pipe.chunker = base.chunker
+    session_pipe.embedding_engine = base.embedding_engine
+    session_pipe.reranker = base.reranker
+    session_pipe.llm_client = base.llm_client
+    session_pipe.query_preprocessor = base.query_preprocessor
+
+    # Copy base document and chunk references
+    session_pipe.documents = list(base.documents)
+    session_pipe.chunks = list(base.chunks)
+
+    # Isolated vector store for this user session
+    session_pipe.vector_store = FinancialVectorStore()
+    session_pipe.vector_store.chunks = list(base.vector_store.chunks)
+    session_pipe.vector_store.embeddings = np.copy(base.vector_store.embeddings)
+
+    # Isolated BM25 index for this user session
+    session_pipe.bm25_retriever = BM25OkapiRetriever()
+    session_pipe.bm25_retriever.index_chunks(session_pipe.chunks)
+
+    session_pipe.hybrid_retriever = HybridFinancialRetriever(
+        session_pipe.vector_store,
+        session_pipe.bm25_retriever,
+        session_pipe.embedding_engine
+    )
+    session_pipe.is_indexed = True
+    return session_pipe
+
+
+# Initialize Session State
+if "pipeline" not in st.session_state:
+    st.session_state.pipeline = create_session_pipeline(base_pipeline)
+
 if "chat_messages" not in st.session_state:
     st.session_state.chat_messages = []
 
+if "uploaded_files_info" not in st.session_state:
+    st.session_state.uploaded_files_info = []
+
+pipeline: FinancialRAGPipeline = st.session_state.pipeline
+
+
 # ----------------------------------------------------------------------------
-# Sidebar: Controls, Uploads & Settings
+# Sidebar: Only for Session Controls & Uploaded Files
 # ----------------------------------------------------------------------------
 with st.sidebar:
     st.title("📈 AlphaResearch")
-    st.caption("AI Financial Analyst Assistant")
+    st.caption("AI Financial Analyst")
 
-    # 1. New Chat Button
+    # Start New Chat Button
     if st.button("🔄 Start New Chat", use_container_width=True, type="primary"):
         st.session_state.chat_messages = []
+        st.session_state.pipeline = create_session_pipeline(base_pipeline)
+        st.session_state.uploaded_files_info = []
         st.rerun()
 
     st.markdown("---")
 
-    # 2. Upload Document
-    st.subheader("📤 Upload Document")
-    uploaded_file = st.file_uploader(
-        "Drag & drop PDF or text report",
-        type=["pdf", "md", "txt"],
-        help="Upload any financial filing or document to query it live."
-    )
-    if uploaded_file is not None:
-        UPLOADS_DIR.mkdir(parents=True, exist_ok=True)
-        save_path = UPLOADS_DIR / uploaded_file.name
-        if not save_path.exists():
-            with open(save_path, "wb") as f:
-                f.write(uploaded_file.getbuffer())
-            added_chunks = pipeline.add_document(save_path)
-            st.success(f"✅ Indexed '{uploaded_file.name}' (+{added_chunks} chunks)!")
+    # Session Uploaded Files Section (Private to this user only)
+    st.subheader("📎 Your Uploaded Files")
+    st.caption("🔒 Private to your session: only you can view and search your uploaded files.")
+
+    if st.session_state.uploaded_files_info:
+        for idx, uinfo in enumerate(st.session_state.uploaded_files_info, start=1):
+            st.markdown(f"**{idx}. {uinfo['name']}**")
+            st.caption(f"Added {uinfo['chunks']} chunks | Size: {uinfo['size_kb']:.1f} KB")
+
+        st.markdown("")
+        if st.button("🗑️ Clear My Uploaded Files", use_container_width=True):
+            st.session_state.pipeline = create_session_pipeline(base_pipeline)
+            st.session_state.uploaded_files_info = []
+            st.success("Uploaded files removed. Reverted to corporate filings.")
             time.sleep(1)
             st.rerun()
-
-    st.markdown("---")
-
-    # 3. LLM API Key Settings
-    st.subheader("🔑 Groq API Key")
-    default_groq = os.getenv("GROQ_API_KEY", "")
-    if not default_groq and hasattr(st, "secrets") and "GROQ_API_KEY" in st.secrets:
-        default_groq = st.secrets["GROQ_API_KEY"]
-
-    api_key_input = st.text_input(
-        "API Key (Free at console.groq.com)",
-        type="password",
-        value=default_groq,
-        placeholder="Paste gsk_... key here"
-    )
-    if api_key_input:
-        pipeline.llm_client.set_keys(groq_key=api_key_input)
-        pipeline.llm_client.provider = "groq"
     else:
-        pipeline.llm_client.provider = "offline"
+        st.info("No files uploaded yet in this session. You can upload any PDF or document directly in the chat!")
 
     st.markdown("---")
+    st.subheader("🏢 Corporate Knowledge Base")
+    st.caption("Pre-indexed filings available to all queries:")
+    st.caption("• Apple Inc. (`AAPL`)")
+    st.caption("• Microsoft Corporation (`MSFT`)")
+    st.caption("• Tesla, Inc. (`TSLA`)")
+    st.caption("• Alphabet Inc. (`GOOGL`)")
+    st.caption("• Amazon.com, Inc. (`AMZN`)")
 
-    # 4. Corporate Filings List
-    st.subheader("📚 Corporate 10-K Filings")
-    base_tickers = {"AAPL", "MSFT", "TSLA", "GOOGL", "AMZN"}
-    for doc in pipeline.documents:
-        if doc.ticker in base_tickers:
-            st.caption(f"• **{doc.company}** ({doc.ticker})")
-
-    # 5. User Uploaded Documents (Displayed separately if uploaded)
-    custom_docs = [d for d in pipeline.documents if d.ticker not in base_tickers]
-    if custom_docs:
-        st.markdown("---")
-        st.subheader("📎 Uploaded Files")
-        for cdoc in custom_docs:
-            st.caption(f"• **{cdoc.company}** ({len(cdoc.sections)} sections)")
-        if st.button("🗑️ Reset Uploads", use_container_width=True, help="Remove uploaded files and reset corpus"):
-            # Clear upload directory files
-            for f in UPLOADS_DIR.glob("*"):
-                try:
-                    f.unlink()
-                except Exception:
-                    pass
-            st.cache_resource.clear()
-            st.rerun()
 
 # ----------------------------------------------------------------------------
-# Main Page: Conversational Chat Interface
+# Main Page: Header, Direct Upload Box & Chat Stream
 # ----------------------------------------------------------------------------
-header_col1, header_col2 = st.columns([5, 1])
-with header_col1:
+header_left, header_right = st.columns([5, 1])
+with header_left:
     st.title("Financial Intelligence Assistant")
-    st.markdown("Ask quantitative or analytical questions about SEC 10-K filings and your uploaded documents.")
-with header_col2:
+    st.markdown("Query verified corporate SEC 10-K filings or upload your own financial documents to analyze them live.")
+with header_right:
     if st.button("🗑️ Clear Chat", use_container_width=True):
         st.session_state.chat_messages = []
         st.rerun()
 
-# Quick Prompt Suggestions (Chips)
-st.caption("Quick suggestions to try:")
-quick_col1, quick_col2, quick_col3, quick_col4 = st.columns(4)
-suggested_prompt = None
+# 📤 Document Uploader Directly in Chat Interface
+with st.expander("📤 Upload Custom Document / PDF (Optional)", expanded=len(st.session_state.uploaded_files_info) == 0):
+    uploaded_file = st.file_uploader(
+        "Drag and drop any PDF, Markdown, or text filing here:",
+        type=["pdf", "md", "txt"],
+        key="main_chat_uploader",
+        help="Files uploaded here are stored in memory for your session only. They will not be visible to any other user."
+    )
+    if uploaded_file is not None:
+        # Check if already uploaded in this session
+        already_indexed = any(u["name"] == uploaded_file.name for u in st.session_state.uploaded_files_info)
+        if not already_indexed:
+            with st.spinner(f"Extracting and indexing '{uploaded_file.name}' for your session..."):
+                # Save into a session-specific scratch file
+                scratch_dir = Path("data") / "uploads" / "session"
+                scratch_dir.mkdir(parents=True, exist_ok=True)
+                temp_path = scratch_dir / f"session_{uploaded_file.name}"
+                with open(temp_path, "wb") as f:
+                    f.write(uploaded_file.getbuffer())
 
-with quick_col1:
+                new_chunks = pipeline.add_document(temp_path)
+                st.session_state.uploaded_files_info.append({
+                    "name": uploaded_file.name,
+                    "chunks": new_chunks,
+                    "size_kb": len(uploaded_file.getbuffer()) / 1024.0
+                })
+
+                # Remove temporary disk file immediately to preserve privacy
+                try:
+                    temp_path.unlink()
+                except Exception:
+                    pass
+
+                st.success(f"✅ Successfully indexed '{uploaded_file.name}' (+{new_chunks} chunks)! It is now private to your chat.")
+                time.sleep(1)
+                st.rerun()
+
+# Quick Prompt Suggestions (Chips)
+st.caption("Quick sample inquiries:")
+q1, q2, q3, q4 = st.columns(4)
+suggested_query = None
+
+with q1:
     if st.button("Apple Net Sales & iPhone", use_container_width=True):
-        suggested_prompt = "What was Apple's total net sales and iPhone revenue in fiscal 2023?"
-with quick_col2:
+        suggested_query = "What was Apple's total net sales and iPhone revenue in fiscal 2023?"
+with q2:
     if st.button("Microsoft Cloud Revenue", use_container_width=True):
-        suggested_prompt = "How much revenue did Microsoft Intelligent Cloud produce in FY23?"
-with quick_col3:
+        suggested_query = "How much revenue did Microsoft Intelligent Cloud produce in FY23?"
+with q3:
     if st.button("Tesla Gross Margin", use_container_width=True):
-        suggested_prompt = "What was Tesla's gross margin and why did operating income decline?"
-with quick_col4:
-    if st.button("Amazon AWS Profit", use_container_width=True):
-        suggested_prompt = "What portion of Amazon's total operating profit came from AWS in 2023?"
+        suggested_query = "What was Tesla's gross margin and why did operating income decline?"
+with q4:
+    if st.button("Amazon AWS Operating Profit", use_container_width=True):
+        suggested_query = "What portion of Amazon's total operating profit came from AWS in 2023?"
 
 st.markdown("---")
 
@@ -198,22 +260,22 @@ for msg in st.session_state.chat_messages:
                 f"Engine: `{msg.get('provider', '')}`"
             )
 
-# Accept User Input
-user_input = st.chat_input("Ask a question about financial disclosures or your uploaded file...")
-active_query = user_input or suggested_prompt
+# Chat Input Box at Bottom
+user_query = st.chat_input("Ask a question about financial disclosures or your uploaded document...")
+active_inquiry = user_query or suggested_query
 
-if active_query:
-    # 1. Append User Message
-    st.session_state.chat_messages.append({"role": "user", "content": active_query})
+if active_inquiry:
+    # 1. Add User Message
+    st.session_state.chat_messages.append({"role": "user", "content": active_inquiry})
     with st.chat_message("user"):
-        st.markdown(active_query)
+        st.markdown(active_inquiry)
 
-    # 2. Run Query through RAG Pipeline
+    # 2. Run Query through this Session's Private Pipeline
     with st.chat_message("assistant"):
         with st.spinner("Analyzing verified documents..."):
             t_start = time.perf_counter()
             result = pipeline.query(
-                active_query,
+                active_inquiry,
                 top_k=3,
                 conversation_history=st.session_state.chat_messages[:-1]
             )
@@ -245,5 +307,5 @@ if active_query:
             "provider": result["provider_used"]
         })
 
-        if suggested_prompt:
+        if suggested_query:
             st.rerun()
