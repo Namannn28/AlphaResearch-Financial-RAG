@@ -1,9 +1,8 @@
 """
-LLM Client Integration for Financial Research Assistant using LangChain & Mistral AI.
+LLM Client Integration for Financial Research Assistant using LangChain & Groq Cloud.
 Supports:
-1. LangChain ChatMistralAI (`from langchain_mistralai import ChatMistralAI`)
-2. Groq Cloud API (`llama-3.3-70b-versatile` via free Groq API key)
-3. Offline Grounded Engine (Runs without an API key for instant offline testing & interviews)
+1. LangChain ChatGroq (`from langchain_groq import ChatGroq`) with Llama 3.3 70B (Free Tier at console.groq.com)
+2. Offline Grounded Engine (Runs without an API key for instant offline testing & interviews)
 """
 
 from typing import List, Dict, Any, Optional
@@ -13,18 +12,18 @@ import json
 import urllib.request
 import urllib.error
 
-# LangChain Imports for Mistral AI
+# LangChain Imports for Groq Cloud
 try:
-    from langchain_mistralai import ChatMistralAI
+    from langchain_groq import ChatGroq
     from langchain_core.messages import SystemMessage, HumanMessage
-    HAS_LANGCHAIN_MISTRAL = True
+    HAS_LANGCHAIN_GROQ = True
 except ImportError:
-    HAS_LANGCHAIN_MISTRAL = False
+    HAS_LANGCHAIN_GROQ = False
 
 class FinancialLLMClient:
     """
     Orchestrates LLM generation with strict grounding and source citations.
-    Integrates LangChain's ChatMistralAI with seamless offline fallback.
+    Integrates LangChain's ChatGroq with seamless offline fallback.
     """
 
     SYSTEM_PROMPT = """You are an expert Senior Financial Analyst & Research Assistant specializing in SEC 10-K filings.
@@ -40,38 +39,38 @@ CRITICAL INSTRUCTIONS:
 
     def __init__(
         self,
-        mistral_api_key: Optional[str] = None,
         groq_api_key: Optional[str] = None,
-        provider: str = "mistral"
+        mistral_api_key: Optional[str] = None,
+        provider: str = "groq"
     ):
-        self.mistral_api_key = mistral_api_key or os.getenv("MISTRAL_API_KEY", "")
         self.groq_api_key = groq_api_key or os.getenv("GROQ_API_KEY", "")
+        self.mistral_api_key = mistral_api_key or os.getenv("MISTRAL_API_KEY", "")
         self.provider = provider.lower()
-        self._mistral_chat_model = None
+        self._groq_chat_model = None
 
-        if self.mistral_api_key and HAS_LANGCHAIN_MISTRAL:
-            self._init_langchain_mistral()
+        if self.groq_api_key and HAS_LANGCHAIN_GROQ:
+            self._init_langchain_groq()
 
-    def _init_langchain_mistral(self):
-        """Initializes LangChain ChatMistralAI model with user's API key."""
+    def _init_langchain_groq(self):
+        """Initializes LangChain ChatGroq model with user's free API key."""
         try:
-            self._mistral_chat_model = ChatMistralAI(
-                model="mistral-small-latest",
-                mistral_api_key=self.mistral_api_key,
+            self._groq_chat_model = ChatGroq(
+                model="llama-3.3-70b-versatile",
+                groq_api_key=self.groq_api_key,
                 temperature=0.1,
                 max_tokens=600
             )
         except Exception:
-            self._mistral_chat_model = None
+            self._groq_chat_model = None
 
-    def set_keys(self, mistral_key: Optional[str] = None, groq_key: Optional[str] = None):
+    def set_keys(self, groq_key: Optional[str] = None, mistral_key: Optional[str] = None):
         """Allows updating API keys dynamically from the Streamlit UI."""
-        if mistral_key:
-            self.mistral_api_key = mistral_key.strip()
-            if HAS_LANGCHAIN_MISTRAL:
-                self._init_langchain_mistral()
         if groq_key:
             self.groq_api_key = groq_key.strip()
+            if HAS_LANGCHAIN_GROQ:
+                self._init_langchain_groq()
+        if mistral_key:
+            self.mistral_api_key = mistral_key.strip()
 
     def generate_answer(
         self,
@@ -81,7 +80,7 @@ CRITICAL INSTRUCTIONS:
         confidence_threshold: float = 0.28
     ) -> Dict[str, Any]:
         """
-        Synthesizes grounded response from retrieved chunks using LangChain ChatMistralAI.
+        Synthesizes grounded response from retrieved chunks using LangChain ChatGroq.
         Triggers explicit safety refusal if confidence is below threshold.
         """
         # Guardrail Refusal Check
@@ -115,58 +114,38 @@ Question: {query}
 
 Provide a concise, professional financial analysis answering the question, with exact numbers and citations:"""
 
-        # Provider Dispatch: LangChain ChatMistralAI
-        if self.provider == "mistral" and self.mistral_api_key:
+        # Provider Dispatch: LangChain ChatGroq
+        if (self.provider == "groq" or not self.provider) and self.groq_api_key:
             try:
-                if HAS_LANGCHAIN_MISTRAL:
-                    if self._mistral_chat_model is None:
-                        self._init_langchain_mistral()
+                if HAS_LANGCHAIN_GROQ:
+                    if self._groq_chat_model is None:
+                        self._init_langchain_groq()
 
                     messages = [
                         SystemMessage(content=self.SYSTEM_PROMPT),
                         HumanMessage(content=user_prompt)
                     ]
-                    response = self._mistral_chat_model.invoke(messages)
+                    response = self._groq_chat_model.invoke(messages)
                     answer = response.content.strip()
                     return {
                         "answer": answer,
                         "is_refusal": False,
-                        "provider_used": "LangChain (ChatMistralAI)",
+                        "provider_used": "LangChain (ChatGroq Llama 3.3 70B)",
                         "citations": citations
                     }
                 else:
-                    # Direct HTTP fallback to Mistral API
-                    answer = self._call_mistral_direct_api(user_prompt)
+                    # Direct HTTP fallback to Groq API
+                    answer = self._call_groq_direct_api(user_prompt)
                     return {
                         "answer": answer,
                         "is_refusal": False,
-                        "provider_used": "Mistral AI (Direct API)",
+                        "provider_used": "Groq Cloud (Direct API)",
                         "citations": citations
                     }
             except Exception as e:
-                # If Mistral API call fails or key invalid, cleanly fallback to offline synthesis
                 offline_answer = self._offline_extractive_synthesis(query, retrieved_chunks)
                 return {
-                    "answer": f"{offline_answer}\n\n*(Note: LangChain ChatMistralAI encountered error: {e}. Fallback synthesized from verified chunks.)*",
-                    "is_refusal": False,
-                    "provider_used": "Offline Fallback",
-                    "citations": citations
-                }
-
-        # Provider Dispatch: Groq API
-        elif self.provider == "groq" and self.groq_api_key:
-            try:
-                answer = self._call_groq_api(user_prompt)
-                return {
-                    "answer": answer,
-                    "is_refusal": False,
-                    "provider_used": "Groq Cloud (API)",
-                    "citations": citations
-                }
-            except Exception as e:
-                offline_answer = self._offline_extractive_synthesis(query, retrieved_chunks)
-                return {
-                    "answer": f"{offline_answer}\n\n*(Note: Groq API encountered: {e}. Fallback synthesized from verified chunks.)*",
+                    "answer": f"{offline_answer}\n\n*(Note: LangChain ChatGroq encountered: {e}. Fallback synthesized from verified chunks.)*",
                     "is_refusal": False,
                     "provider_used": "Offline Fallback",
                     "citations": citations
@@ -181,29 +160,7 @@ Provide a concise, professional financial analysis answering the question, with 
             "citations": citations
         }
 
-    def _call_mistral_direct_api(self, user_prompt: str) -> str:
-        """Invokes Mistral AI API directly via standard Python urllib."""
-        url = "https://api.mistral.ai/v1/chat/completions"
-        headers = {
-            "Content-Type": "application/json",
-            "Authorization": f"Bearer {self.mistral_api_key}"
-        }
-        payload = {
-            "model": "mistral-small-latest",
-            "messages": [
-                {"role": "system", "content": self.SYSTEM_PROMPT},
-                {"role": "user", "content": user_prompt}
-            ],
-            "temperature": 0.1,
-            "max_tokens": 500
-        }
-
-        req = urllib.request.Request(url, data=json.dumps(payload).encode("utf-8"), headers=headers)
-        with urllib.request.urlopen(req, timeout=15) as response:
-            res_data = json.loads(response.read().decode("utf-8"))
-            return res_data["choices"][0]["message"]["content"].strip()
-
-    def _call_groq_api(self, user_prompt: str) -> str:
+    def _call_groq_direct_api(self, user_prompt: str) -> str:
         """Invokes Groq API directly via standard Python urllib."""
         url = "https://api.groq.com/openai/v1/chat/completions"
         headers = {

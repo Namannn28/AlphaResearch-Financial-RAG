@@ -12,7 +12,7 @@
 > 2. ***Hybrid retrieval** fusing BM25 keyword matching for exact dollar amounts and ticker symbols with Dense embeddings via Reciprocal Rank Fusion (RRF).*
 > 3. *A **Cross-Encoder reranker** that re-scores candidates with cross-attention.*
 > 4. *An explicit **confidence refusal threshold** that rejects out-of-corpus queries instead of hallucinating.*
-> 5. *A **free Mistral API integration** with an automatic offline extractive fallback.*
+> 5. *A **free LangChain ChatGroq (Llama 3.3 70B)** integration with an automatic offline extractive fallback.*
 > 6. *A **labeled 29-question benchmark** demonstrating 100% Recall@3 and 100% refusal accuracy on adversarial traps with sub-15ms retrieval latency."*
 
 ---
@@ -87,7 +87,7 @@
 
 ### Q5: How did you integrate the LLM, and what happens if the API key is missing?
 **Answer**:
-> *"I integrated the free Mistral AI API (`mistral-small-latest`) and Groq API (`llama-3.3-70b-versatile`) using standard HTTP requests to avoid bloated dependency conflicts. I also built a deterministic offline extractive generator. If an API key is not provided or network fails, the system synthesizes answers directly from the top verified chunks with citations. It never crashes."*
+> *"I integrated the free **Groq Cloud API** using LangChain's `ChatGroq` (`llama-3.3-70b-versatile`) for ultra-fast, high-accuracy conversational inference (~500 tokens/sec). I also engineered an offline extractive fallback engine. If an API key is not supplied or network fails, the system automatically synthesizes answers directly from the top verified chunks with citations. It never crashes."*
 
 ---
 
@@ -95,8 +95,8 @@
 
 Copy and paste these directly onto your resume:
 
-- **AI-Powered Financial Research Assistant (Advanced RAG)** | *Python, Mistral API, Groq, ChromaDB/Vector Store, BM25, Streamlit, Pytest*
+- **AI-Powered Financial Research Assistant (Advanced RAG)** | *Python, LangChain, Groq (Llama 3.3 70B), Vector Store, BM25, Streamlit, Pytest*
   - Developed an enterprise RAG assistant to query and compare SEC 10-K financial disclosures across Apple, Microsoft, Tesla, Alphabet, and Amazon.
   - Implemented section-aware financial document chunking and hybrid retrieval (Dense MiniLM + BM25Okapi) fused via Reciprocal Rank Fusion (RRF).
   - Integrated Cross-Encoder reranking and a confidence refusal guardrail, achieving **100.0% Recall@3** and **100.0% Out-of-Corpus Refusal Accuracy** across a 29-question benchmark.
-  - Built a multi-provider LLM client supporting free Mistral/Groq APIs with zero-dependency offline fallback and deployed an interactive 4-tab Streamlit dashboard.
+  - Built an LLM generation layer using LangChain ChatGroq (Llama 3.3 70B) with zero-dependency offline fallback and deployed an interactive 4-tab Streamlit dashboard.

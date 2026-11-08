@@ -85,21 +85,17 @@ with st.sidebar:
     st.subheader("🔑 LLM Provider Settings")
     provider_choice = st.selectbox(
         "Generation Backend",
-        options=["Offline Grounded Engine", "LangChain ChatMistralAI (Mistral API)", "Groq Cloud (Free API)"],
+        options=["LangChain ChatGroq (Free API)", "Offline Grounded Engine"],
         index=0,
-        help="Works completely offline without keys, or integrate LangChain ChatMistralAI with a free Mistral API key."
+        help="Integrate LangChain ChatGroq (Llama 3.3 70B) with your free Groq API key, or use the offline grounded engine."
     )
 
     import os
     api_key_input = ""
-    if "Mistral" in provider_choice:
-        default_mistral = os.getenv("MISTRAL_API_KEY", "")
-        api_key_input = st.text_input("Mistral API Key", type="password", value=default_mistral, placeholder="Paste free key from console.mistral.ai")
-        st.caption("🔑 Free API key available at [console.mistral.ai](https://console.mistral.ai/)")
-    elif "Groq" in provider_choice:
+    if "Groq" in provider_choice:
         default_groq = os.getenv("GROQ_API_KEY", "")
-        api_key_input = st.text_input("Groq API Key", type="password", value=default_groq, placeholder="Paste free key from console.groq.com")
-        st.caption("🔑 Free API key available at [console.groq.com](https://console.groq.com/)")
+        api_key_input = st.text_input("Groq Free API Key", type="password", value=default_groq, placeholder="Paste free key from console.groq.com/keys")
+        st.caption("🔑 Free API key available at [console.groq.com/keys](https://console.groq.com/keys)")
 
     st.markdown("---")
     st.subheader("⚙️ Retrieval Architecture")
@@ -111,18 +107,18 @@ with st.sidebar:
     config.confidence_threshold = threshold
 
     st.markdown("---")
-    st.caption("Candidate Corpus: Apple, Microsoft, Tesla, Alphabet, Amazon")
+    st.caption("Indexed 10-K Filings: Apple, Microsoft, Tesla, Alphabet, Amazon")
 
 # Map provider choice to internal string
-provider_code = "offline"
-if "Mistral" in provider_choice:
-    provider_code = "mistral"
-elif "Groq" in provider_choice:
-    provider_code = "groq"
+provider_code = "groq" if "Groq" in provider_choice else "offline"
 
 pipeline = get_pipeline(use_hybrid=use_hybrid, use_reranker=use_reranker, llm_provider=provider_code)
 
 if api_key_input:
+    pipeline.llm_client.set_keys(groq_key=api_key_input)
+    pipeline.llm_client.provider = "groq"
+else:
+    pipeline.llm_client.provider = "offline"
     if provider_code == "mistral":
         pipeline.llm_client.set_keys(mistral_key=api_key_input)
         pipeline.llm_client.provider = "mistral"

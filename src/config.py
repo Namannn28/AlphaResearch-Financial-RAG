@@ -41,8 +41,7 @@ class FinancialRAGConfig:
     confidence_threshold: float = 0.28
 
     # LLM Settings
-    default_provider: str = "mistral"  # "mistral", "groq", or "offline"
-    mistral_model: str = "mistral-small-latest"
+    default_provider: str = "groq"  # "groq" (default free), "mistral", or "offline"
     groq_model: str = "llama-3.3-70b-versatile"
     temperature: float = 0.1
     max_tokens: int = 600

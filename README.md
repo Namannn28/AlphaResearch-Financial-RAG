@@ -5,9 +5,9 @@
 [![License: Apache 2.0](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](LICENSE)
 [![Recall@3: 100%](https://img.shields.io/badge/Recall%403-100%25-brightgreen.svg)]()
 [![Refusal Accuracy: 100%](https://img.shields.io/badge/Safety_Refusal-100%25-success.svg)]()
-[![LLM: Mistral / Groq / Offline](https://img.shields.io/badge/LLM-Mistral%20%7C%20Groq%20%7C%20Offline-orange.svg)]()
+[![LLM: LangChain ChatGroq](https://img.shields.io/badge/LLM-LangChain%20%7C%20ChatGroq%20%7C%20Llama%203.3-orange.svg)]()
 
-> **Production Engineering Philosophy**: Most beginner RAG projects are tutorial clones that run basic vector search over a random PDF and hallucinate when an answer isn't in the document. **AlphaResearch** is built as evaluated software: a financial intelligence assistant that queries and compares SEC 10-K filings with section-aware chunking, hybrid retrieval (BM25 + Dense vector search), cross-encoder reranking, explicit hallucination refusal guardrails, and free Mistral/Groq LLM integration.
+> **Production Engineering Philosophy**: Most beginner RAG projects are tutorial clones that run basic vector search over a random PDF and hallucinate when an answer isn't in the document. **AlphaResearch** is built as evaluated software: a financial intelligence assistant that queries and compares SEC 10-K filings with section-aware chunking, hybrid retrieval (BM25 + Dense vector search), cross-encoder reranking, explicit hallucination refusal guardrails, and free LangChain ChatGroq (Llama 3.3 70B) LLM integration.
 
 ---
 
@@ -103,8 +103,8 @@ Unlike tutorial repos that index an arbitrary sample PDF, **AlphaResearch** oper
   [REFUSAL - INSUFFICIENT_EVIDENCE]: The 10-K filings do not contain documented evidence to answer '...'.
   ```
 
-### 4. Free LLM Integration & Offline Reliability
-- Integrates free **Mistral AI** (`mistral-small-latest`) and **Groq Cloud** (`llama-3.3-70b-versatile`) via direct HTTP requests.
+### 4. Free Groq LLM Integration & Offline Reliability
+- Integrates free **Groq Cloud** (`llama-3.3-70b-versatile` via LangChain's `ChatGroq`) for ultra-low latency, high-accuracy conversational answers using a 100% free API key from [console.groq.com/keys](https://console.groq.com/keys).
 - Includes a built-in **Offline Extractive Engine**: if no API key is supplied, the app generates grounded citation-backed answers directly from the chunks. It runs immediately out of the box with zero setup hurdles.
 
 ---
@@ -178,7 +178,7 @@ AlphaResearch-Financial-RAG/
 ├── app.py                       # 4-tab Streamlit web application
 ├── simple_rag.py                # Single-file ~220-line interview-ready script (LangChain)
 ├── INTERVIEW_CHEAT_SHEET.md     # 60-second pitch, interview Q&A, and resume guide
-├── .env.example                 # Free Mistral API key configuration
+├── .env.example                 # Free Groq API key configuration
 ├── requirements.txt             # Clean, minimal dependencies
 └── README.md                    # Technical report & model card
 ```
@@ -187,11 +187,11 @@ AlphaResearch-Financial-RAG/
 
 ## 📝 Resume Bullet Points (Ready to Copy-Paste)
 
-- **AI-Powered Financial Research Assistant (Advanced RAG)** | *Python, Mistral API, Groq, ChromaDB/Vector Store, BM25, Streamlit, Pytest*
+- **AI-Powered Financial Research Assistant (Advanced RAG)** | *Python, LangChain, Groq (Llama 3.3 70B), Vector Store, BM25, Streamlit, Pytest*
   - Developed an enterprise RAG assistant to query and compare SEC 10-K financial disclosures across Apple, Microsoft, Tesla, Alphabet, and Amazon.
   - Implemented section-aware financial document chunking and hybrid retrieval (Dense MiniLM + BM25Okapi) fused via Reciprocal Rank Fusion (RRF).
   - Integrated Cross-Encoder reranking and a confidence refusal guardrail, achieving **100.0% Recall@3** and **100.0% Out-of-Corpus Refusal Accuracy** across a 29-question benchmark.
-  - Built a multi-provider LLM client supporting free Mistral/Groq APIs with zero-dependency offline fallback and deployed an interactive 4-tab Streamlit dashboard.
+  - Built a multi-provider LLM client supporting LangChain ChatGroq (Llama 3.3 70B) with zero-dependency offline fallback and deployed an interactive 4-tab Streamlit dashboard.
 
 ---
 

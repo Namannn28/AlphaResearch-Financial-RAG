@@ -3,16 +3,16 @@
 simple_rag.py - Standalone Financial Research Assistant (Interview-Ready RAG)
 ==============================================================================
 Designed for freshers to read, run, and confidently explain during technical
-AI/ML Engineer and GenAI interviews in under 5 minutes.
+AI/ML Engineer, Generative AI, and SDE interviews in under 5 minutes.
 
 Core Steps Covered:
 1. Ingestion: Reads SEC 10-K company annual reports (Apple, Microsoft, Tesla, etc.)
-2. Chunking: Section-aware chunking preserving financial tables and headers.
+2. Chunking: Section-aware chunking preserving financial balance sheets & tables.
 3. Embeddings: In-memory dense embeddings (MiniLM) for semantic search.
 4. BM25 Lexical Search: Keyword scoring for exact numbers ($383B, 18.2%) and tickers.
-5. Hybrid Fusion (RRF): Combines vector and keyword search.
+5. Hybrid Fusion (RRF): Combines vector semantics and keyword search.
 6. Guardrail Refusal: Refuses out-of-corpus queries when confidence < threshold.
-7. LLM Answer Synthesis: Mistral API integration with automatic offline fallback.
+7. LLM Answer Synthesis: LangChain ChatGroq (Llama 3.3 70B) with automatic offline fallback.
 ==============================================================================
 """
 
@@ -156,28 +156,28 @@ class SimpleEmbedder:
         return (tfidf / norms).astype(np.float32)
 
 # ----------------------------------------------------------------------------
-# 5. Hybrid Search & Guardrail Answer Synthesis (LangChain MistralAI)
+# 5. Hybrid Search & Guardrail Answer Synthesis (LangChain ChatGroq)
 # ----------------------------------------------------------------------------
 class FinancialRAG:
-    """Coordinates retrieval, confidence evaluation, and answer generation using LangChain."""
+    """Coordinates retrieval, confidence evaluation, and answer generation using LangChain ChatGroq."""
 
-    def __init__(self, reports_dir: Path, mistral_api_key: Optional[str] = None):
+    def __init__(self, reports_dir: Path, groq_api_key: Optional[str] = None):
         import numpy as np
         self.np = np
         self.chunks = load_and_chunk_reports(reports_dir)
         self.bm25 = SimpleBM25(self.chunks)
         self.embedder = SimpleEmbedder()
         self.chunk_vectors = self.embedder.embed([c.text for c in self.chunks])
-        self.mistral_key = mistral_api_key or os.getenv("MISTRAL_API_KEY", "")
+        self.groq_key = groq_api_key or os.getenv("GROQ_API_KEY", "")
 
-        # Initialize LangChain ChatMistralAI model
+        # Initialize LangChain ChatGroq model (Free Tier Llama 3.3 70B)
         self.chat_model = None
-        if self.mistral_key:
+        if self.groq_key:
             try:
-                from langchain_mistralai import ChatMistralAI
-                self.chat_model = ChatMistralAI(
-                    model="mistral-small-latest",
-                    mistral_api_key=self.mistral_key,
+                from langchain_groq import ChatGroq
+                self.chat_model = ChatGroq(
+                    model="llama-3.3-70b-versatile",
+                    groq_api_key=self.groq_key,
                     temperature=0.1
                 )
             except Exception:
@@ -237,7 +237,7 @@ class FinancialRAG:
                 f"Refusing to speculate to prevent financial hallucination."
             )
 
-        # Step 5: Answer with LangChain ChatMistralAI (or clean offline extractive fallback)
+        # Step 5: Answer with LangChain ChatGroq (or clean offline extractive fallback)
         if self.chat_model is not None:
             try:
                 from langchain_core.messages import SystemMessage, HumanMessage
@@ -247,14 +247,7 @@ class FinancialRAG:
                 ]
                 response = self.chat_model.invoke(messages)
                 answer = response.content.strip()
-                return f"{answer}\n\n*(Citations: [{best_chunk.company} ({best_chunk.ticker}) | {best_chunk.section_title}] | Provider: LangChain ChatMistralAI | Latency: {latency_ms:.1f}ms)*"
-            except Exception:
-                pass  # Fallback to offline extraction
-
-        elif self.mistral_key:
-            try:
-                answer = self._call_mistral(query, best_chunk.text)
-                return f"{answer}\n\n*(Citations: [{best_chunk.company} ({best_chunk.ticker}) | {best_chunk.section_title}] | Provider: Mistral API | Latency: {latency_ms:.1f}ms)*"
+                return f"{answer}\n\n*(Citations: [{best_chunk.company} ({best_chunk.ticker}) | {best_chunk.section_title}] | Provider: LangChain ChatGroq (Llama 3.3 70B) | Latency: {latency_ms:.1f}ms)*"
             except Exception:
                 pass  # Fallback to offline extraction
 
@@ -265,22 +258,6 @@ class FinancialRAG:
             f"> {best_chunk.text.splitlines()[-1] if len(best_chunk.text.splitlines()) > 1 else best_chunk.text}\n\n"
             f"*(Confidence: {confidence:.2f} | Latency: {latency_ms:.1f}ms)*"
         )
-
-    def _call_mistral(self, query: str, context: str) -> str:
-        url = "https://api.mistral.ai/v1/chat/completions"
-        headers = {"Content-Type": "application/json", "Authorization": f"Bearer {self.mistral_key}"}
-        payload = {
-            "model": "mistral-small-latest",
-            "messages": [
-                {"role": "system", "content": "You are a financial analyst. Answer using ONLY the provided context with citations."},
-                {"role": "user", "content": f"Context:\n{context}\n\nQuestion: {query}"}
-            ],
-            "temperature": 0.1,
-            "max_tokens": 300
-        }
-        req = urllib.request.Request(url, data=json.dumps(payload).encode("utf-8"), headers=headers)
-        with urllib.request.urlopen(req, timeout=10) as resp:
-            return json.loads(resp.read().decode("utf-8"))["choices"][0]["message"]["content"].strip()
 
 # ----------------------------------------------------------------------------
 # 6. Demonstration Entry Point
