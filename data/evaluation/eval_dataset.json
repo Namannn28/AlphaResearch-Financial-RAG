@@ -1,0 +1,335 @@
+[
+  {
+    "id": "eval_001",
+    "query": "Which candidate has experience with TensorRT-LLM and vLLM for inference optimization?",
+    "target_candidate": "candidate_1_alex_chen_ai_systems.md",
+    "ground_truth_section": "Technical Skills",
+    "ground_truth_keywords": ["TensorRT-LLM", "vLLM", "inference", "Alex Chen"],
+    "is_answerable": true,
+    "expected_answer": "Alex Chen has extensive experience with TensorRT-LLM and vLLM, reducing p99 latency by 45% on Kubernetes GPU clusters."
+  },
+  {
+    "id": "eval_002",
+    "query": "What latency improvements did Alex Chen achieve at ScaleFlow AI?",
+    "target_candidate": "candidate_1_alex_chen_ai_systems.md",
+    "ground_truth_section": "Work Experience - ScaleFlow AI",
+    "ground_truth_keywords": ["52ms", "28ms", "speculative decoding", "continuous batching"],
+    "is_answerable": true,
+    "expected_answer": "Alex Chen implemented speculative decoding and continuous batching, decreasing average token latency from 52ms to 28ms per token."
+  },
+  {
+    "id": "eval_003",
+    "query": "How much cloud API cost did Alex Chen save by implementing semantic caching?",
+    "target_candidate": "candidate_1_alex_chen_ai_systems.md",
+    "ground_truth_section": "Work Experience - ScaleFlow AI",
+    "ground_truth_keywords": ["$42,000", "Redis", "Milvus", "caching"],
+    "is_answerable": true,
+    "expected_answer": "Engineered an automated semantic caching layer using Redis and Milvus that cut OpenAI API operational costs by $42,000 monthly."
+  },
+  {
+    "id": "eval_004",
+    "query": "Where did Alex Chen complete his Master's degree and what was his specialization?",
+    "target_candidate": "candidate_1_alex_chen_ai_systems.md",
+    "ground_truth_section": "Education",
+    "ground_truth_keywords": ["Stanford University", "Distributed Systems", "Master of Science"],
+    "is_answerable": true,
+    "expected_answer": "Alex Chen earned a Master of Science in Computer Science with a specialization in Distributed Systems from Stanford University."
+  },
+  {
+    "id": "eval_005",
+    "query": "What open-source contribution did Alex Chen author regarding KV-cache memory?",
+    "target_candidate": "candidate_1_alex_chen_ai_systems.md",
+    "ground_truth_section": "Key Projects - OpenServe-LLM",
+    "ground_truth_keywords": ["OpenServe-LLM", "KV-cache", "memory fragmentation", "AWQ", "GPTQ"],
+    "is_answerable": true,
+    "expected_answer": "Alex created OpenServe-LLM, a benchmarking suite for measuring KV-cache memory fragmentation across quantized models (AWQ, GPTQ, FP8)."
+  },
+  {
+    "id": "eval_006",
+    "query": "Who has experience with Apache Iceberg and Delta Lake migrations?",
+    "target_candidate": "candidate_2_priya_sharma_data_platform.md",
+    "ground_truth_section": "Work Experience - CloudMetric Corp",
+    "ground_truth_keywords": ["Priya Sharma", "Apache Iceberg", "Delta Lake", "Hadoop"],
+    "is_answerable": true,
+    "expected_answer": "Priya Sharma led the migration of an on-premise 1.8 PB Hadoop cluster to an AWS Databricks Lakehouse with Apache Iceberg and Delta Lake."
+  },
+  {
+    "id": "eval_007",
+    "query": "What was the ingestion latency reduction achieved by Priya Sharma using Flink and Kafka?",
+    "target_candidate": "candidate_2_priya_sharma_data_platform.md",
+    "ground_truth_section": "Work Experience - CloudMetric Corp",
+    "ground_truth_keywords": ["4 hours", "90 seconds", "Apache Flink", "Kafka"],
+    "is_answerable": true,
+    "expected_answer": "Ingestion latency was reduced from 4 hours (batch) to under 90 seconds (streaming) via Apache Flink and Kafka ingestion workers."
+  },
+  {
+    "id": "eval_008",
+    "query": "How did Priya Sharma reduce Snowflake compute costs at FinStream Analytics?",
+    "target_candidate": "candidate_2_priya_sharma_data_platform.md",
+    "ground_truth_section": "Work Experience - FinStream Analytics",
+    "ground_truth_keywords": ["$180,000", "Snowflake", "query profile", "clustering keys"],
+    "is_answerable": true,
+    "expected_answer": "Optimized Snowflake credit utilization, saving $180,000 annually by analyzing query profile spillage and clustering keys."
+  },
+  {
+    "id": "eval_009",
+    "query": "What is the purpose of Priya Sharma's open-source LakeShield tool?",
+    "target_candidate": "candidate_2_priya_sharma_data_platform.md",
+    "ground_truth_section": "Key Projects - LakeShield",
+    "ground_truth_keywords": ["LakeShield", "schema-evolution", "Delta Lake", "breaking schema drift"],
+    "is_answerable": true,
+    "expected_answer": "LakeShield is an automated schema-evolution validator for Delta Lake tables preventing backward-incompatible column deletions."
+  },
+  {
+    "id": "eval_010",
+    "query": "What certifications does Priya Sharma hold?",
+    "target_candidate": "candidate_2_priya_sharma_data_platform.md",
+    "ground_truth_section": "Education",
+    "ground_truth_keywords": ["AWS Certified Solutions Architect – Professional"],
+    "is_answerable": true,
+    "expected_answer": "Priya holds the AWS Certified Solutions Architect – Professional certification."
+  },
+  {
+    "id": "eval_011",
+    "query": "Which candidate has lead experience in migrating to Next.js 14 and GraphQL federation?",
+    "target_candidate": "candidate_3_marcus_vance_fullstack_lead.md",
+    "ground_truth_section": "Work Experience - Nexus Commerce",
+    "ground_truth_keywords": ["Marcus Vance", "Next.js 14", "GraphQL federation", "App Router"],
+    "is_answerable": true,
+    "expected_answer": "Marcus Vance led frontend migration to Next.js 14 and designed a unified GraphQL federation gateway unifying 8 microservices."
+  },
+  {
+    "id": "eval_012",
+    "query": "What performance improvement did Marcus Vance achieve on Google Core Web Vitals?",
+    "target_candidate": "candidate_3_marcus_vance_fullstack_lead.md",
+    "ground_truth_section": "Work Experience - Nexus Commerce",
+    "ground_truth_keywords": ["Core Web Vitals", "54 to 96", "Nexus Commerce"],
+    "is_answerable": true,
+    "expected_answer": "Boosted Google Core Web Vitals score from 54 to 96 following migration to Next.js 14 App Router."
+  },
+  {
+    "id": "eval_013",
+    "query": "How did Marcus Vance optimize slow PostgreSQL queries at Elevate SaaS?",
+    "target_candidate": "candidate_3_marcus_vance_fullstack_lead.md",
+    "ground_truth_section": "Work Experience - Elevate SaaS Solutions",
+    "ground_truth_keywords": ["EXPLAIN ANALYZE", "B-tree", "partial indexes", "1.4s to 120ms"],
+    "is_answerable": true,
+    "expected_answer": "Analyzed EXPLAIN ANALYZE plans and implemented composite B-tree and partial indexes, cutting 95th-percentile response times from 1.4s to 120ms."
+  },
+  {
+    "id": "eval_014",
+    "query": "What collaborative editing technology did Marcus Vance build for markdown documents?",
+    "target_candidate": "candidate_3_marcus_vance_fullstack_lead.md",
+    "ground_truth_section": "Key Projects - Real-Time Markdown Document Workspace",
+    "ground_truth_keywords": ["CRDT", "Yjs", "IndexedDB", "operational transformation"],
+    "is_answerable": true,
+    "expected_answer": "Engineered a collaborative markdown editor featuring CRDT via Yjs and offline synchronization using IndexedDB."
+  },
+  {
+    "id": "eval_015",
+    "query": "Which candidate has experience with Chaos Mesh and PCI-DSS compliance on Kubernetes?",
+    "target_candidate": "candidate_4_elena_rostova_devops_sre.md",
+    "ground_truth_section": "Work Experience - StripeGuard Financial",
+    "ground_truth_keywords": ["Elena Rostova", "Chaos Mesh", "PCI-DSS", "Kubernetes"],
+    "is_answerable": true,
+    "expected_answer": "Elena Rostova maintained 14 PCI-DSS compliant Kubernetes clusters and performed chaos drills using Chaos Mesh."
+  },
+  {
+    "id": "eval_016",
+    "query": "What deployment rollback duration did Elena Rostova achieve with ArgoCD?",
+    "target_candidate": "candidate_4_elena_rostova_devops_sre.md",
+    "ground_truth_section": "Work Experience - StripeGuard Financial",
+    "ground_truth_keywords": ["ArgoCD", "GitOps", "25 minutes", "40 seconds"],
+    "is_answerable": true,
+    "expected_answer": "Slashed deployment rollback duration from 25 minutes to under 40 seconds using ArgoCD GitOps pipelines."
+  },
+  {
+    "id": "eval_017",
+    "query": "How did Elena Rostova reduce MTTR at OmniCloud Tech?",
+    "target_candidate": "candidate_4_elena_rostova_devops_sre.md",
+    "ground_truth_section": "Work Experience - OmniCloud Tech",
+    "ground_truth_keywords": ["OpenTelemetry", "Grafana Tempo", "MTTR", "55 minutes to 12 minutes"],
+    "is_answerable": true,
+    "expected_answer": "Built centralized telemetry with OpenTelemetry and Grafana Tempo, reducing MTTR from 55 minutes to 12 minutes."
+  },
+  {
+    "id": "eval_018",
+    "query": "What is the function of Elena Rostova's GitOps-KubeAudit project?",
+    "target_candidate": "candidate_4_elena_rostova_devops_sre.md",
+    "ground_truth_section": "Key Projects - GitOps-KubeAudit",
+    "ground_truth_keywords": ["GitOps-KubeAudit", "admission controller", "security context constraints"],
+    "is_answerable": true,
+    "expected_answer": "A Kubernetes admission controller validating resource requests, security contexts, and network policies prior to namespace admission."
+  },
+  {
+    "id": "eval_019",
+    "query": "Which candidate is a recent graduate with research experience in NLP hallucination mitigation?",
+    "target_candidate": "candidate_5_david_kim_junior_ml_engineer.md",
+    "ground_truth_section": "Work Experience - Undergraduate Research Assistant",
+    "ground_truth_keywords": ["David Kim", "hallucination mitigation", "NLP Lab", "Northeastern"],
+    "is_answerable": true,
+    "expected_answer": "David Kim investigated hallucination mitigation at Northeastern University NLP Lab and curated 1,500 labeled question-context pairs."
+  },
+  {
+    "id": "eval_019b",
+    "query": "What model and fine-tuning method did David Kim use during his internship at Cognita AI Labs?",
+    "target_candidate": "candidate_5_david_kim_junior_ml_engineer.md",
+    "ground_truth_section": "Work Experience - Cognita AI Labs",
+    "ground_truth_keywords": ["Mistral-7B", "LoRA", "summarization", "ROUGE-1"],
+    "is_answerable": true,
+    "expected_answer": "David used open-source Mistral-7B with LoRA fine-tuning, improving ROUGE-1 score by 14% for document summarization."
+  },
+  {
+    "id": "eval_020",
+    "query": "How does David Kim's SemanticCodeSearch-CLI chunk source code?",
+    "target_candidate": "candidate_5_david_kim_junior_ml_engineer.md",
+    "ground_truth_section": "Key Projects - SemanticCodeSearch-CLI",
+    "ground_truth_keywords": ["AST", "Abstract Syntax Tree", "method boundaries", "ChromaDB"],
+    "is_answerable": true,
+    "expected_answer": "It uses Abstract Syntax Tree (AST) parsing to chunk code blocks at semantic method boundaries rather than arbitrary lines."
+  },
+  {
+    "id": "eval_021",
+    "query": "What university did David Kim attend and what was his graduation GPA?",
+    "target_candidate": "candidate_5_david_kim_junior_ml_engineer.md",
+    "ground_truth_section": "Education",
+    "ground_truth_keywords": ["Northeastern University", "Summa Cum Laude", "3.92"],
+    "is_answerable": true,
+    "expected_answer": "Graduated Summa Cum Laude with a 3.92/4.0 GPA from Northeastern University in Computer Science."
+  },
+  {
+    "id": "eval_022",
+    "query": "Which candidate specializes in DevSecOps, Semgrep, and Snyk CI/CD gates?",
+    "target_candidate": "candidate_6_sarah_jenkins_security_engineer.md",
+    "ground_truth_section": "Work Experience - Apex Financial",
+    "ground_truth_keywords": ["Sarah Jenkins", "Semgrep", "Snyk", "CI/CD"],
+    "is_answerable": true,
+    "expected_answer": "Sarah Jenkins designed CI/CD security gates with Semgrep and Snyk, remediating 140+ critical vulnerabilities across 35 codebases."
+  },
+  {
+    "id": "eval_023",
+    "query": "How many leaked credentials did Sarah Jenkins intercept at CyberShield Labs?",
+    "target_candidate": "candidate_6_sarah_jenkins_security_engineer.md",
+    "ground_truth_section": "Work Experience - CyberShield Labs",
+    "ground_truth_keywords": ["TruffleHog", "84 leaked API keys", "1,200 repositories"],
+    "is_answerable": true,
+    "expected_answer": "Intercepted 84 leaked API keys and AWS tokens across 1,200 repositories using TruffleHog and custom regex patterns."
+  },
+  {
+    "id": "eval_024",
+    "query": "What professional security certifications does Sarah Jenkins possess?",
+    "target_candidate": "candidate_6_sarah_jenkins_security_engineer.md",
+    "ground_truth_section": "Education & Certifications",
+    "ground_truth_keywords": ["OSCP", "CISSP", "AWS Certified Security – Specialty"],
+    "is_answerable": true,
+    "expected_answer": "Sarah holds OSCP (Offensive Security Certified Professional), CISSP, and AWS Certified Security – Specialty."
+  },
+  {
+    "id": "eval_025",
+    "query": "What open policy tool did Sarah Jenkins publish for Kubernetes and Terraform?",
+    "target_candidate": "candidate_6_sarah_jenkins_security_engineer.md",
+    "ground_truth_section": "Key Projects - OPA-Policy-Vault",
+    "ground_truth_keywords": ["OPA-Policy-Vault", "Open Policy Agent", "Rego", "CIS benchmark"],
+    "is_answerable": true,
+    "expected_answer": "Published OPA-Policy-Vault, a reusable collection of OPA Rego policies enforcing CIS benchmarks on Kubernetes and Terraform."
+  },
+  {
+    "id": "eval_026",
+    "query": "Does candidate Alex Chen have experience with Milvus and Qdrant vector databases?",
+    "target_candidate": "candidate_1_alex_chen_ai_systems.md",
+    "ground_truth_section": "Technical Skills",
+    "ground_truth_keywords": ["Milvus", "Qdrant", "vector stores"],
+    "is_answerable": true,
+    "expected_answer": "Yes, Alex Chen lists Milvus and Qdrant in technical skills and utilized Milvus for semantic caching at ScaleFlow AI."
+  },
+  {
+    "id": "eval_027",
+    "query": "Which candidate has built real-time fraud detection pipelines processing 18,000 transactions per second?",
+    "target_candidate": "candidate_2_priya_sharma_data_platform.md",
+    "ground_truth_section": "Work Experience - FinStream Analytics",
+    "ground_truth_keywords": ["Priya Sharma", "fraud detection", "18,000 transactions", "Spark Streaming"],
+    "is_answerable": true,
+    "expected_answer": "Priya Sharma built real-time fraud detection pipelines processing 18,000 transactions per second with Spark Streaming and Redis."
+  },
+  {
+    "id": "eval_028",
+    "query": "Who developed an accessible UI component library with Tailwind CSS and Radix UI?",
+    "target_candidate": "candidate_3_marcus_vance_fullstack_lead.md",
+    "ground_truth_section": "Key Projects - UI-Craft Component Library",
+    "ground_truth_keywords": ["Marcus Vance", "UI-Craft", "Tailwind CSS", "Radix UI", "WCAG 2.1 AA"],
+    "is_answerable": true,
+    "expected_answer": "Marcus Vance created UI-Craft, an open-source accessible React component library built with Tailwind CSS and Radix primitives."
+  },
+  {
+    "id": "eval_029",
+    "query": "Which candidate is a Certified Kubernetes Administrator (CKA)?",
+    "target_candidate": "candidate_4_elena_rostova_devops_sre.md",
+    "ground_truth_section": "Education",
+    "ground_truth_keywords": ["Elena Rostova", "Certified Kubernetes Administrator", "CKA"],
+    "is_answerable": true,
+    "expected_answer": "Elena Rostova holds the Certified Kubernetes Administrator (CKA) certification from the Linux Foundation."
+  },
+  {
+    "id": "eval_030",
+    "query": "What was David Kim's ROC-AUC metric for his medical image classifier project?",
+    "target_candidate": "candidate_5_david_kim_junior_ml_engineer.md",
+    "ground_truth_section": "Key Projects - Multi-Modal Medical Image Classifier",
+    "ground_truth_keywords": ["0.88 ROC-AUC", "ChestX-ray14", "pneumonia detection"],
+    "is_answerable": true,
+    "expected_answer": "David achieved an 0.88 ROC-AUC metric for pneumonia detection training ResNet-50 and Vision Transformer on ChestX-ray14."
+  },
+  {
+    "id": "eval_neg_031",
+    "query": "Does candidate Marcus Vance have experience training deep learning models on TPU pods?",
+    "target_candidate": null,
+    "ground_truth_section": null,
+    "ground_truth_keywords": [],
+    "is_answerable": false,
+    "expected_answer": "INSUFFICIENT_EVIDENCE: Marcus Vance's profile contains frontend and full-stack software engineering experience and has no record of training models on TPU pods."
+  },
+  {
+    "id": "eval_neg_032",
+    "query": "Which candidate in the database has 5 years of professional production Rust experience?",
+    "target_candidate": null,
+    "ground_truth_section": null,
+    "ground_truth_keywords": [],
+    "is_answerable": false,
+    "expected_answer": "INSUFFICIENT_EVIDENCE: None of the candidate resumes in the corpus document 5 years of production Rust development experience."
+  },
+  {
+    "id": "eval_neg_033",
+    "query": "What is Alex Chen's documented experience managing SAP ERP enterprise database migrations?",
+    "target_candidate": null,
+    "ground_truth_section": null,
+    "ground_truth_keywords": [],
+    "is_answerable": false,
+    "expected_answer": "INSUFFICIENT_EVIDENCE: Alex Chen's profile is focused on AI systems and model serving infrastructure; there is no documented record of SAP ERP database migrations."
+  },
+  {
+    "id": "eval_neg_034",
+    "query": "Has Elena Rostova written firmware drivers for ARM Cortex-M microcontrollers in C?",
+    "target_candidate": null,
+    "ground_truth_section": null,
+    "ground_truth_keywords": [],
+    "is_answerable": false,
+    "expected_answer": "INSUFFICIENT_EVIDENCE: Elena Rostova's background is in cloud site reliability engineering and Kubernetes, with no embedded ARM firmware experience listed."
+  },
+  {
+    "id": "eval_neg_035",
+    "query": "Which candidate has worked extensively with COBOL on IBM z/OS mainframes?",
+    "target_candidate": null,
+    "ground_truth_section": null,
+    "ground_truth_keywords": [],
+    "is_answerable": false,
+    "expected_answer": "INSUFFICIENT_EVIDENCE: No candidates in the current corpus document experience with COBOL or IBM mainframes."
+  },
+  {
+    "id": "eval_neg_036",
+    "query": "What is Sarah Jenkins' experience fine-tuning diffusion models for text-to-3D asset generation?",
+    "target_candidate": null,
+    "ground_truth_section": null,
+    "ground_truth_keywords": [],
+    "is_answerable": false,
+    "expected_answer": "INSUFFICIENT_EVIDENCE: Sarah Jenkins specializes in AppSec and cloud penetration testing; no generative 3D diffusion modeling experience is present."
+  }
+]
