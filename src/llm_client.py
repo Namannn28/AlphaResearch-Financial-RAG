@@ -103,6 +103,29 @@ CRITICAL INSTRUCTIONS:
             if HAS_LANGCHAIN_GROQ:
                 self._init_langchain_groq()
 
+    @staticmethod
+    def _sanitize_output_text(text: str) -> str:
+        """Normalizes unicode characters to safe characters to prevent Windows console encoding errors."""
+        replacements = {
+            "\u202f": " ",
+            "\xa0": " ",
+            "\u200b": "",
+            "’": "'",
+            "‘": "'",
+            "“": '"',
+            "”": '"',
+            "≈": "~",
+            "–": "-",
+            "—": "-",
+            "•": "*",
+            "…": "...",
+            "【": "[",
+            "】": "]"
+        }
+        for k, v in replacements.items():
+            text = text.replace(k, v)
+        return text
+
     def generate_answer(
         self,
         query: str,
@@ -118,13 +141,14 @@ CRITICAL INSTRUCTIONS:
         """
         # Guardrail Refusal Check
         if not retrieved_chunks or confidence_score < confidence_threshold:
+            refusal_msg = (
+                f"[REFUSAL - INSUFFICIENT_EVIDENCE]: The indexed documents do not contain documented "
+                f"evidence to reliably answer: \"{query}\". "
+                f"(Confidence score {confidence_score:.2f} is below the safety threshold of {confidence_threshold:.2f}). "
+                f"Refusing to generate an ungrounded response to prevent financial hallucination."
+            )
             return {
-                "answer": (
-                    f"[REFUSAL - INSUFFICIENT_EVIDENCE]: The indexed documents do not contain documented "
-                    f"evidence to reliably answer: \"{query}\". "
-                    f"(Confidence score {confidence_score:.2f} is below the safety threshold of {confidence_threshold:.2f}). "
-                    f"Refusing to generate an ungrounded response to prevent financial hallucination."
-                ),
+                "answer": self._sanitize_output_text(refusal_msg),
                 "is_refusal": True,
                 "provider_used": "GuardrailRefusal",
                 "citations": []
@@ -168,7 +192,7 @@ Provide a concise, professional financial analysis answering the question, with 
 
                         messages.append(HumanMessage(content=user_prompt))
                         response = self._groq_chat_model.invoke(messages)
-                        answer = response.content.strip()
+                        answer = self._sanitize_output_text(response.content.strip())
                         model_name = getattr(self, "active_model_name", "ChatGroq")
                         return {
                             "answer": answer,
@@ -178,7 +202,7 @@ Provide a concise, professional financial analysis answering the question, with 
                         }
 
                 # Direct API fallback
-                answer = self._call_groq_direct_api(user_prompt)
+                answer = self._sanitize_output_text(self._call_groq_direct_api(user_prompt))
                 return {
                     "answer": answer,
                     "is_refusal": False,
@@ -186,7 +210,7 @@ Provide a concise, professional financial analysis answering the question, with 
                     "citations": citations
                 }
             except Exception as e:
-                offline_answer = self._offline_extractive_synthesis(query, retrieved_chunks)
+                offline_answer = self._sanitize_output_text(self._offline_extractive_synthesis(query, retrieved_chunks))
                 return {
                     "answer": f"{offline_answer}\n\n*(Note: Cloud call encountered '{e}'. Fallback synthesized directly from verified chunks.)*",
                     "is_refusal": False,
@@ -195,7 +219,7 @@ Provide a concise, professional financial analysis answering the question, with 
                 }
 
         # Default: Deterministic Offline Grounded Extractive Synthesis
-        answer = self._offline_extractive_synthesis(query, retrieved_chunks)
+        answer = self._sanitize_output_text(self._offline_extractive_synthesis(query, retrieved_chunks))
         return {
             "answer": answer,
             "is_refusal": False,
