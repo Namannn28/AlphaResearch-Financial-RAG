@@ -1,117 +1,67 @@
 """
-Vector Store Module for CandidateFit-RAG.
-
-Provides an in-memory vector store optimized for candidate retrieval,
-featuring cosine similarity calculation, metadata filtering (by candidate name or section),
-and deterministic top-K sorting.
+In-Memory Dense Vector Store with Metadata Filtering and Cosine Similarity.
+Designed for fast local execution without heavyweight external server dependencies.
 """
 
-from typing import List, Tuple, Optional, Dict, Any
+from typing import List, Dict, Any, Optional
 import numpy as np
+from src.chunking import FinancialChunk
 
-from src.chunking import Chunk
+class FinancialVectorStore:
+    """Stores embedded financial chunks and performs cosine nearest-neighbor search."""
 
-
-class InMemoryVectorStore:
-    """
-    Lightweight, highly inspectable vector index.
-    Eliminates external vector DB daemon overhead while providing exact cosine similarity.
-    """
     def __init__(self):
-        self.chunks: List[Chunk] = []
+        self.chunks: List[FinancialChunk] = []
         self.embeddings: Optional[np.ndarray] = None
-        self._doc_id_to_index: Dict[str, List[int]] = {}
 
-    def clear(self):
-        """Resets the vector store index."""
-        self.chunks = []
-        self.embeddings = None
-        self._doc_id_to_index = {}
-
-    def add_chunks(self, chunks: List[Chunk], embeddings: np.ndarray):
-        """
-        Adds text chunks and their corresponding normalized dense vector embeddings.
-        
-        Args:
-            chunks: List of Chunk objects.
-            embeddings: Numpy array of shape (len(chunks), dimension).
-        """
+    def add_chunks(self, chunks: List[FinancialChunk], embeddings: np.ndarray):
+        """Adds chunks and their corresponding embedding vectors to the store."""
         if len(chunks) != len(embeddings):
-            raise ValueError(
-                f"Mismatch: received {len(chunks)} chunks but {len(embeddings)} embedding vectors."
-            )
+            raise ValueError(f"Chunk count {len(chunks)} does not match embedding count {len(embeddings)}")
 
-        start_idx = len(self.chunks)
         self.chunks.extend(chunks)
-
         if self.embeddings is None:
             self.embeddings = embeddings.astype(np.float32)
         else:
             self.embeddings = np.vstack([self.embeddings, embeddings.astype(np.float32)])
 
-        # Update index lookup for candidate/document filtering
-        for i, chunk in enumerate(chunks):
-            idx = start_idx + i
-            if chunk.doc_id not in self._doc_id_to_index:
-                self._doc_id_to_index[chunk.doc_id] = []
-            self._doc_id_to_index[chunk.doc_id].append(idx)
-
-    def search(
+    def similarity_search(
         self,
-        query_embedding: np.ndarray,
-        top_k: int = 5,
-        candidate_name_filter: Optional[str] = None
-    ) -> List[Tuple[Chunk, float]]:
+        query_vector: np.ndarray,
+        top_k: int = 10,
+        filter_company: Optional[str] = None
+    ) -> List[Dict[str, Any]]:
         """
-        Performs exact nearest-neighbor search via cosine similarity.
-        
-        Args:
-            query_embedding: Normalized query vector of shape (dimension,).
-            top_k: Number of highest-similarity chunks to return.
-            candidate_name_filter: Optional filter to restrict search to a single candidate.
-            
-        Returns:
-            List of (Chunk, similarity_score) tuples sorted in descending order of score.
+        Calculates cosine similarities between query vector and stored document vectors.
+        Returns top-k most similar chunks with metadata.
         """
         if self.embeddings is None or len(self.chunks) == 0:
             return []
 
-        # Ensure query vector is unit normalized
-        query_norm = np.linalg.norm(query_embedding)
-        if query_norm > 0:
-            normalized_query = query_embedding / query_norm
-        else:
-            normalized_query = query_embedding
+        # Cosine similarity for normalized vectors is simply the dot product
+        scores = np.dot(self.embeddings, query_vector)
 
-        # Dot product with pre-normalized chunk embeddings equals cosine similarity
-        similarity_scores = np.dot(self.embeddings, normalized_query)
+        ranked_indices = np.argsort(scores)[::-1]
+        results: List[Dict[str, Any]] = []
 
-        # Apply candidate filter if requested
-        if candidate_name_filter:
-            valid_indices = [
-                i for i, chunk in enumerate(self.chunks)
-                if candidate_name_filter.lower() in chunk.candidate_name.lower()
-            ]
-        else:
-            valid_indices = list(range(len(self.chunks)))
+        for idx in ranked_indices:
+            chunk = self.chunks[idx]
+            # Optional company filter
+            if filter_company and filter_company.lower() not in chunk.company.lower() and filter_company.upper() != chunk.ticker:
+                continue
 
-        if not valid_indices:
-            return []
+            results.append({
+                "chunk": chunk,
+                "score": float(scores[idx]),
+                "rank": len(results) + 1
+            })
 
-        valid_scores = similarity_scores[valid_indices]
-        
-        # Sort indices by similarity descending
-        sorted_sub_indices = np.argsort(valid_scores)[::-1][:top_k]
-
-        results: List[Tuple[Chunk, float]] = []
-        for sub_idx in sorted_sub_indices:
-            original_idx = valid_indices[sub_idx]
-            chunk = self.chunks[original_idx]
-            score = float(valid_scores[sub_idx])
-            results.append((chunk, score))
+            if len(results) >= top_k:
+                break
 
         return results
 
-    def get_total_chunks(self) -> int:
-        """Returns the total number of indexed chunks."""
-        return len(self.chunks)
+    def clear(self):
+        """Resets the vector store."""
+        self.chunks = []
+        self.embeddings = None

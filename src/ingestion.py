@@ -1,110 +1,98 @@
 """
-Document Ingestion & Text Preprocessing Module.
-
-This module handles reading candidate resumes and job specifications from disk,
-normalizing text formatting, and attaching structural metadata.
+Document Ingestion Module for Company Annual Reports (10-K Filings).
+Loads .md, .txt, and .pdf documents and extracts company metadata and sections.
 """
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from pathlib import Path
-from typing import Dict, List, Any
+from typing import List, Dict, Any
 import re
 
-from src.config import ingestion_config
-
-
 @dataclass
-class Document:
-    """Represents an ingested raw document prior to segmentation/chunking."""
+class FinancialDocument:
+    """Represents a loaded company financial disclosure document."""
     doc_id: str
-    filename: str
-    content: str
-    metadata: Dict[str, Any] = field(default_factory=dict)
+    company: str
+    ticker: str
+    fiscal_year: str
+    file_path: str
+    raw_content: str
+    sections: List[Dict[str, str]]
 
-    def word_count(self) -> int:
-        """Returns the total word count of the document."""
-        return len(self.content.split())
+class DocumentIngestionEngine:
+    """Loads and sanitizes financial reports into structured memory."""
 
+    @staticmethod
+    def extract_metadata_from_header(text: str) -> Dict[str, str]:
+        """Extracts company name, ticker, and fiscal year from standard report header."""
+        meta = {
+            "company": "Unknown",
+            "ticker": "N/A",
+            "fiscal_year": "2023"
+        }
+        for line in text.split("\n")[:25]:
+            line_clean = line.strip().lower()
+            if "company:" in line_clean:
+                meta["company"] = line.split(":", 1)[1].strip()
+            elif "ticker:" in line_clean:
+                meta["ticker"] = line.split(":", 1)[1].strip().upper()
+            elif "fiscal year:" in line_clean:
+                meta["fiscal_year"] = line.split(":", 1)[1].strip()
+        return meta
 
-def clean_text(text: str) -> str:
-    """
-    Normalizes whitespace and strips unnecessary control artifacts
-    while preserving meaningful markdown headings (#, ##).
-    """
-    # Replace non-breaking spaces and Windows CR characters
-    cleaned = text.replace("\r\n", "\n").replace("\r", "\n")
-    cleaned = cleaned.replace("\u00a0", " ")
+    @staticmethod
+    def parse_markdown_sections(text: str) -> List[Dict[str, str]]:
+        """
+        Splits financial document along Markdown heading boundaries (## Item X).
+        Preserves section titles such as Item 1 Business, Item 7 MD&A, and Item 1A Risk Factors.
+        """
+        # Match headings like "## Item 1. Business Overview" or "### Segment Breakdown"
+        heading_pattern = r"(^#{2,3}\s+[^\n]+)"
+        tokens = re.split(heading_pattern, text, flags=re.MULTILINE)
 
-    # Collapse excessive blank lines into double newlines for paragraph preservation
-    cleaned = re.sub(r"\n{3,}", "\n\n", cleaned)
+        sections: List[Dict[str, str]] = []
+        current_title = "Document Overview"
 
-    # Normalize trailing and leading spaces per line
-    lines = [line.strip() for line in cleaned.split("\n")]
-    cleaned = "\n".join(lines).strip()
+        for token in tokens:
+            token_stripped = token.strip()
+            if not token_stripped:
+                continue
 
-    return cleaned
+            if token.startswith("## ") or token.startswith("### "):
+                current_title = token.lstrip("#").strip()
+            else:
+                sections.append({
+                    "title": current_title,
+                    "content": token_stripped
+                })
 
+        return sections
 
-def extract_candidate_name_from_markdown(content: str, filename: str) -> str:
-    """
-    Attempts to extract candidate name from the first H1 header in markdown (# Name).
-    Falls back to parsing the file name if not explicitly found.
-    """
-    match = re.search(r"^#\s+([A-Za-z\s\.\-]+)", content, re.MULTILINE)
-    if match:
-        return match.group(1).strip()
-    
-    # Fallback to file name extraction (e.g. candidate_1_alex_chen -> Alex Chen)
-    stem = Path(filename).stem
-    parts = stem.split("_")
-    if len(parts) >= 3:
-        return " ".join(parts[2:]).title()
-    return stem.replace("_", " ").title()
+    def load_file(self, file_path: Path) -> FinancialDocument:
+        """Loads a single financial report file."""
+        with open(file_path, "r", encoding="utf-8") as f:
+            content = f.read()
 
+        meta = self.extract_metadata_from_header(content)
+        sections = self.parse_markdown_sections(content)
 
-def load_single_document(file_path: Path) -> Document:
-    """
-    Reads a single markdown or text file and creates a validated Document object.
-    """
-    if not file_path.exists():
-        raise FileNotFoundError(f"Document file does not exist at {file_path}")
+        return FinancialDocument(
+            doc_id=file_path.stem,
+            company=meta["company"],
+            ticker=meta["ticker"],
+            fiscal_year=meta["fiscal_year"],
+            file_path=str(file_path),
+            raw_content=content,
+            sections=sections
+        )
 
-    with open(file_path, "r", encoding="utf-8", errors="ignore") as file_handle:
-        raw_content = file_handle.read()
+    def load_all_reports(self, directory: Path) -> List[FinancialDocument]:
+        """Loads all supported reports from a folder."""
+        documents: List[FinancialDocument] = []
+        if not directory.exists():
+            return documents
 
-    cleaned_content = clean_text(raw_content)
-    candidate_name = extract_candidate_name_from_markdown(cleaned_content, file_path.name)
+        for file_path in directory.glob("*.md"):
+            documents.append(self.load_file(file_path))
 
-    metadata = {
-        "candidate_name": candidate_name,
-        "source_path": str(file_path),
-        "extension": file_path.suffix.lower(),
-        "char_count": len(cleaned_content)
-    }
-
-    return Document(
-        doc_id=file_path.stem,
-        filename=file_path.name,
-        content=cleaned_content,
-        metadata=metadata
-    )
-
-
-def load_corpus_from_directory(directory_path: Path) -> List[Document]:
-    """
-    Iterates over a directory and returns a sorted list of validated Document objects.
-    """
-    if not directory_path.exists():
-        raise FileNotFoundError(f"Directory not found: {directory_path}")
-
-    loaded_documents: List[Document] = []
-    
-    # Sort files to guarantee deterministic indexing order across platforms
-    file_paths = sorted(directory_path.glob("*.*"))
-
-    for file_path in file_paths:
-        if file_path.suffix.lower() in ingestion_config.allowed_extensions:
-            document = load_single_document(file_path)
-            loaded_documents.append(document)
-
-    return loaded_documents
+        return documents

@@ -1,128 +1,93 @@
 """
-Unit and Integration Test Suite for CandidateFit-RAG.
-
-Verifies:
-1. Document ingestion and metadata extraction
-2. Fixed-window vs Section-aware chunking behaviors
-3. Lexical BM25 and Dense vector retrieval
-4. Reciprocal Rank Fusion (RRF) logic
-5. Out-of-corpus refusal safety guardrails
+Unit and Integration Tests for Financial Research Assistant RAG Pipeline.
+Verifies ingestion, section-aware chunking, BM25 exact matching,
+vector cosine search, hybrid fusion, and refusal guardrails.
 """
 
 import pytest
 from pathlib import Path
+from src.config import config, REPORTS_DIR
+from src.ingestion import DocumentIngestionEngine
+from src.chunking import SectionAwareFinancialChunker, FixedWindowChunker
+from src.embeddings import FinancialEmbeddingEngine
+from src.vector_store import FinancialVectorStore
+from src.lexical_search import BM25OkapiRetriever
+from src.hybrid_retriever import HybridFinancialRetriever
+from src.pipeline import FinancialRAGPipeline
 
-from src.ingestion import load_single_document, clean_text, Document
-from src.chunking import FixedWindowChunker, SectionAwareSemanticChunker, build_chunks
-from src.vector_store import InMemoryVectorStore
-from src.lexical_search import BM25LexicalSearcher
-from src.pipeline import CandidateFitRAGPipeline
-from src.config import RESUMES_DIR, retrieval_config
-import numpy as np
+@pytest.fixture
+def sample_reports():
+    engine = DocumentIngestionEngine()
+    docs = engine.load_all_reports(REPORTS_DIR)
+    assert len(docs) >= 5, "Expected at least 5 financial reports (Apple, Microsoft, Tesla, Alphabet, Amazon)"
+    return docs
 
+def test_document_ingestion(sample_reports):
+    """Verifies that all 10-K files are loaded and metadata parsed properly."""
+    tickers = {doc.ticker for doc in sample_reports}
+    assert "AAPL" in tickers
+    assert "MSFT" in tickers
+    assert "TSLA" in tickers
+    assert "GOOGL" in tickers
+    assert "AMZN" in tickers
 
-def test_text_cleaning():
-    raw = "Line 1\r\n\r\n\r\n\r\nLine 2   \u00a0"
-    cleaned = clean_text(raw)
-    assert "\r" not in cleaned
-    assert "\u00a0" not in cleaned
-    assert "Line 1\n\nLine 2" == cleaned
+def test_section_aware_chunking(sample_reports):
+    """Verifies section-aware chunking preserves section titles."""
+    chunker = SectionAwareFinancialChunker(min_chars=20)
+    chunks = chunker.chunk_document(sample_reports[0])
+    assert len(chunks) > 0
+    # Every chunk should contain the company name in brackets
+    assert f"[{sample_reports[0].company}" in chunks[0].text
 
+def test_bm25_exact_figure_search(sample_reports):
+    """Tests BM25 precision on exact financial figures ($383,285 or iPhone)."""
+    chunker = SectionAwareFinancialChunker(min_chars=20)
+    all_chunks = []
+    for doc in sample_reports:
+        all_chunks.extend(chunker.chunk_document(doc))
 
-def test_section_aware_chunking_preserves_headers():
-    sample_text = (
-        "# Jane Doe\n"
-        "## Technical Skills\n"
-        "Python, PyTorch, Docker, Kubernetes.\n\n"
-        "## Work Experience\n"
-        "### Staff Engineer | TechCorp (2022 - Present)\n"
-        "Built low-latency model serving platform with vLLM."
-    )
-    doc = Document(
-        doc_id="test_doc",
-        filename="test_doc.md",
-        content=sample_text,
-        metadata={"candidate_name": "Jane Doe"}
-    )
-    chunker = SectionAwareSemanticChunker(min_section_length_chars=20)
-    chunks = chunker.chunk_document(doc)
+    bm25 = BM25OkapiRetriever()
+    bm25.index_chunks(all_chunks)
 
-    assert len(chunks) >= 2
-    headers = [c.section_title for c in chunks]
-    assert any("Technical Skills" in h for h in headers)
-    assert any("Staff Engineer" in h for h in headers)
-    # Check that candidate name is explicitly prefixed
-    assert all("Jane Doe" in c.text for c in chunks)
+    hits = bm25.search("383,285 iPhone", top_k=3)
+    assert len(hits) > 0
+    assert "Apple" in hits[0]["chunk"].company
 
+def test_hybrid_retrieval_and_rrf(sample_reports):
+    """Verifies hybrid Reciprocal Rank Fusion returns top hits."""
+    chunker = SectionAwareFinancialChunker(min_chars=20)
+    all_chunks = []
+    for doc in sample_reports:
+        all_chunks.extend(chunker.chunk_document(doc))
 
-def test_fixed_window_chunking_overlap():
-    words = [f"word_{i}" for i in range(100)]
-    doc = Document(
-        doc_id="fixed_test",
-        filename="fixed_test.md",
-        content=" ".join(words),
-        metadata={"candidate_name": "Test Candidate"}
-    )
-    chunker = FixedWindowChunker(window_size_words=40, overlap_words=10)
-    chunks = chunker.chunk_document(doc)
+    embedder = FinancialEmbeddingEngine(prefer_sentence_transformer=False)
+    vec_store = FinancialVectorStore()
+    vectors = embedder.embed_texts([c.text for c in all_chunks])
+    vec_store.add_chunks(all_chunks, vectors)
 
-    assert len(chunks) == 3
-    # Step = 30 words
-    assert chunks[0].metadata["start_word_index"] == 0
-    assert chunks[1].metadata["start_word_index"] == 30
-    assert chunks[2].metadata["start_word_index"] == 60
+    bm25 = BM25OkapiRetriever()
+    bm25.index_chunks(all_chunks)
 
+    hybrid = HybridFinancialRetriever(vec_store, bm25, embedder)
+    hits = hybrid.retrieve("Microsoft Intelligent Cloud Azure", top_k=3)
+    assert len(hits) > 0
+    assert any("Microsoft" in h["chunk"].company for h in hits)
 
-def test_in_memory_vector_store():
-    store = InMemoryVectorStore()
-    doc = Document("d1", "d1.md", "dummy", {"candidate_name": "Alice"})
-    chunker = FixedWindowChunker(window_size_words=10, overlap_words=2)
-    chunks = chunker.chunk_document(Document("d1", "d1.md", "word " * 20, {"candidate_name": "Alice"}))
+def test_refusal_guardrail_on_adversarial_query():
+    """Verifies that queries about out-of-corpus topics trigger refusal."""
+    pipeline = FinancialRAGPipeline(prefer_neural=False)
+    pipeline.load_and_index(REPORTS_DIR)
 
-    # Create dummy 4-dimensional normalized embeddings
-    embs = np.array([
-        [1.0, 0.0, 0.0, 0.0],
-        [0.0, 1.0, 0.0, 0.0]
-    ], dtype=np.float32)
+    result = pipeline.query("What was Apple's total profit from passenger airlines in 2023?")
+    assert result["is_refusal"] is True
+    assert "INSUFFICIENT_EVIDENCE" in result["answer"]
 
-    store.add_chunks(chunks[:2], embs)
+def test_pipeline_citation_generation():
+    """Verifies that successful queries include structured citations."""
+    pipeline = FinancialRAGPipeline(prefer_neural=False)
+    pipeline.load_and_index(REPORTS_DIR)
 
-    query_vec = np.array([0.9, 0.1, 0.0, 0.0], dtype=np.float32)
-    results = store.search(query_vec, top_k=1)
-
-    assert len(results) == 1
-    best_chunk, score = results[0]
-    assert score > 0.8
-    assert best_chunk.doc_id == "d1"
-
-
-def test_bm25_lexical_exact_keyword_retrieval():
-    searcher = BM25LexicalSearcher()
-    chunker = SectionAwareSemanticChunker(min_section_length_chars=10)
-    chunk1 = chunker.chunk_document(
-        Document("d1", "d1.md", "## Skills\nProficient in vLLM and TensorRT-LLM GPU serving.", {"candidate_name": "Alex"})
-    )[0]
-    chunk2 = chunker.chunk_document(
-        Document("d2", "d2.md", "## Skills\nProficient in Apache Iceberg and Snowflake lakehouses.", {"candidate_name": "Priya"})
-    )[0]
-
-    searcher.index_chunks([chunk1, chunk2])
-
-    hits = searcher.search("TensorRT-LLM", top_k=1)
-    assert len(hits) == 1
-    assert hits[0][0].candidate_name == "Alex"
-
-
-def test_out_of_corpus_safety_refusal():
-    pipeline = CandidateFitRAGPipeline(
-        chunking_strategy="section_aware",
-        prefer_sentence_transformer=False
-    )
-    pipeline.build_index()
-
-    # Query with a capability completely absent from the candidate pool
-    unanswerable_query = "Which candidate has 8 years of COBOL and Fortran 77 development on IBM mainframes?"
-    response = pipeline.query(unanswerable_query)
-
-    assert response.is_refusal is True
-    assert "INSUFFICIENT_EVIDENCE" in response.answer
+    result = pipeline.query("What was Tesla's gross margin and revenue in 2023?")
+    assert result["is_refusal"] is False
+    assert len(result["citations"]) > 0
+    assert any("Tesla" in c for c in result["citations"])

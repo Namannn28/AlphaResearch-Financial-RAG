@@ -1,133 +1,107 @@
 """
-Lexical Keyword Search Module for CandidateFit-RAG.
-
-Technical resumes contain crucial exact-match entities (e.g., 'vLLM', 'ArgoCD',
-'Delta Lake', 'Next.js 14', 'OSCP', 'SOC 2'). Pure dense retrieval can miss
-these exact acronyms due to semantic smoothing. This module provides BM25 / TF-IDF
-lexical retrieval to pair with dense semantic search.
+BM25 Lexical Keyword Search for Financial Data.
+Handles exact matches for ticker symbols (AAPL, MSFT, TSLA, AMZN),
+currency metrics ($383.29 billion), and percentages (44.1%).
 """
 
-from typing import List, Tuple, Optional
+from typing import List, Dict, Any, Optional
 import math
 import re
+from src.chunking import FinancialChunk
 
-from src.chunking import Chunk
+class BM25OkapiRetriever:
+    """Standard Okapi BM25 implementation for exact keyword search."""
 
-
-def tokenize_for_lexical_search(text: str) -> List[str]:
-    """
-    Tokenizes text while preserving technical symbols like dots, hyphens, and pluses
-    (e.g., 'c++', 'next.js', 'gpt-4').
-    """
-    clean = text.lower()
-    # Replace markdown punctuation but preserve identifiers
-    tokens = re.findall(r"[a-z0-9][a-z0-9\.\-\+]*", clean)
-    return tokens
-
-
-class BM25LexicalSearcher:
-    """
-    BM25Okapi ranking implementation built from first principles.
-    Guarantees zero external dependency failure and gives full transparency
-    over IDF calculation and length normalization.
-    """
     def __init__(self, k1: float = 1.5, b: float = 0.75):
         self.k1 = k1
         self.b = b
-        self.chunks: List[Chunk] = []
-        self.corpus_size: int = 0
-        self.avg_doc_len: float = 0.0
-        self.doc_lengths: List[int] = []
-        self.doc_token_counts: List[dict] = []
-        self.doc_frequencies: dict = {}
-        self.idf: dict = {}
+        self.chunks: List[FinancialChunk] = []
+        self.corpus_size = 0
+        self.avg_doc_len = 0.0
+        self.doc_lens: List[int] = []
+        self.doc_freqs: Dict[str, int] = {}
+        self.term_freqs: List[Dict[str, int]] = []
 
-    def index_chunks(self, chunks: List[Chunk]):
-        """Indexes candidate chunks and computes Inverse Document Frequency (IDF)."""
+    @staticmethod
+    def tokenize(text: str) -> List[str]:
+        """Tokenizes text preserving financial figures, percentages, and tickers."""
+        # Keep words, currency amounts like $383.29, percentages like 44.1%, and numbers
+        tokens = re.findall(r"[\$]?[a-zA-Z0-9_\.]+%?", text.lower())
+        return [t for t in tokens if len(t) > 1 or t in {"$", "%"}]
+
+    def index_chunks(self, chunks: List[FinancialChunk]):
+        """Builds inverted index and term frequency tables over chunks."""
         self.chunks = chunks
         self.corpus_size = len(chunks)
-        self.doc_lengths = []
-        self.doc_token_counts = []
-        self.doc_frequencies = {}
-
-        if self.corpus_size == 0:
-            return
+        self.doc_lens = []
+        self.doc_freqs = {}
+        self.term_freqs = []
 
         total_length = 0
         for chunk in chunks:
-            tokens = tokenize_for_lexical_search(chunk.text)
-            length = len(tokens)
-            self.doc_lengths.append(length)
-            total_length += length
+            tokens = self.tokenize(chunk.text)
+            self.doc_lens.append(len(tokens))
+            total_length += len(tokens)
 
-            token_counts = {}
-            unique_tokens = set()
-            for token in tokens:
-                token_counts[token] = token_counts.get(token, 0) + 1
-                unique_tokens.add(token)
+            tf: Dict[str, int] = {}
+            for t in tokens:
+                tf[t] = tf.get(t, 0) + 1
+            self.term_freqs.append(tf)
 
-            self.doc_token_counts.append(token_counts)
+            for unique_t in tf.keys():
+                self.doc_freqs[unique_t] = self.doc_freqs.get(unique_t, 0) + 1
 
-            for token in unique_tokens:
-                self.doc_frequencies[token] = self.doc_frequencies.get(token, 0) + 1
-
-        self.avg_doc_len = total_length / self.corpus_size if self.corpus_size > 0 else 0.0
-
-        # Calculate BM25 IDF: ln((N - df + 0.5) / (df + 0.5) + 1.0)
-        self.idf = {}
-        for token, df in self.doc_frequencies.items():
-            idf_score = math.log(((self.corpus_size - df + 0.5) / (df + 0.5)) + 1.0)
-            self.idf[token] = max(idf_score, 0.05)  # floor to prevent negative IDF for common terms
+        self.avg_doc_len = (total_length / self.corpus_size) if self.corpus_size > 0 else 1.0
 
     def search(
         self,
         query: str,
-        top_k: int = 5,
-        candidate_name_filter: Optional[str] = None
-    ) -> List[Tuple[Chunk, float]]:
-        """
-        Calculates BM25 scores for the input query across all indexed chunks.
-        """
-        if self.corpus_size == 0:
-            return []
-
-        query_tokens = tokenize_for_lexical_search(query)
-        if not query_tokens:
+        top_k: int = 10,
+        filter_company: Optional[str] = None
+    ) -> List[Dict[str, Any]]:
+        """Calculates BM25 score for query across all indexed chunks."""
+        query_tokens = self.tokenize(query)
+        if not query_tokens or self.corpus_size == 0:
             return []
 
         scores: List[float] = [0.0] * self.corpus_size
 
-        for i in range(self.corpus_size):
-            chunk = self.chunks[i]
-            
-            # Filter check
-            if candidate_name_filter and candidate_name_filter.lower() not in chunk.candidate_name.lower():
+        for token in query_tokens:
+            if token not in self.doc_freqs:
                 continue
 
-            doc_len = self.doc_lengths[i]
-            token_counts = self.doc_token_counts[i]
-            score = 0.0
+            # Inverse Document Frequency (IDF) with BM25 smoothing
+            df = self.doc_freqs[token]
+            idf = math.log(1.0 + (self.corpus_size - df + 0.5) / (df + 0.5))
 
-            for token in query_tokens:
-                if token not in token_counts:
+            for idx in range(self.corpus_size):
+                tf = self.term_freqs[idx].get(token, 0)
+                if tf == 0:
                     continue
 
-                term_frequency = token_counts[token]
-                idf_val = self.idf.get(token, 0.0)
+                doc_len = self.doc_lens[idx]
+                numerator = tf * (self.k1 + 1.0)
+                denominator = tf + self.k1 * (1.0 - self.b + self.b * (doc_len / self.avg_doc_len))
+                scores[idx] += idf * (numerator / denominator)
 
-                # Standard BM25 term weighting formula
-                numerator = term_frequency * (self.k1 + 1.0)
-                denominator = term_frequency + self.k1 * (1.0 - self.b + self.b * (doc_len / (self.avg_doc_len or 1.0)))
-                score += idf_val * (numerator / denominator)
+        # Rank and filter
+        ranked_indices = sorted(range(len(scores)), key=lambda i: scores[i], reverse=True)
+        results: List[Dict[str, Any]] = []
 
-            scores[i] = score
+        for idx in ranked_indices:
+            if scores[idx] <= 0.0:
+                break
+            chunk = self.chunks[idx]
+            if filter_company and filter_company.lower() not in chunk.company.lower() and filter_company.upper() != chunk.ticker:
+                continue
 
-        # Rank documents by score descending
-        ranked_indices = sorted(
-            [i for i in range(self.corpus_size) if scores[i] > 0.0],
-            key=lambda idx: scores[idx],
-            reverse=True
-        )[:top_k]
+            results.append({
+                "chunk": chunk,
+                "score": float(scores[idx]),
+                "rank": len(results) + 1
+            })
 
-        results = [(self.chunks[idx], scores[idx]) for idx in ranked_indices]
+            if len(results) >= top_k:
+                break
+
         return results

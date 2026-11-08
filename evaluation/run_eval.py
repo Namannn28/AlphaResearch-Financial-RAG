@@ -1,222 +1,130 @@
 """
-Comprehensive Quantitative Evaluation Harness for CandidateFit-RAG.
-
-Executes comparative benchmarks across:
-1. Chunking Strategies: Fixed-Window vs Section-Aware Semantic Chunking
-2. Retrieval Modes: Dense-only vs BM25-only vs Hybrid RRF
-3. Re-ranking: Baseline (No Rerank) vs Cross-Encoder Re-ranked
-4. Guardrail Safety: Out-of-Corpus Refusal Accuracy
-
-Outputs exact metrics (Hit Rate@K, MRR@K, Latency, Cost) suitable for README and resumes.
+Evaluation Benchmark Runner for Financial Research Assistant RAG.
+Runs comparative benchmark across 4 system configurations:
+1. Baseline: Fixed-Window Chunking + Dense Retrieval Only
+2. Stage 1: Section-Aware Chunking + Dense Retrieval Only
+3. Stage 2: Section-Aware Chunking + Hybrid Retrieval (BM25 + Dense RRF)
+4. Production: Section-Aware + Hybrid + Cross-Encoder Reranker
 """
 
-from typing import List, Dict, Any
 import json
 import time
-import sys
 from pathlib import Path
+from typing import Dict, Any, List
 
-# Add project root to sys.path so script can be invoked from any directory
-PROJECT_ROOT = Path(__file__).resolve().parent.parent
-if str(PROJECT_ROOT) not in sys.path:
-    sys.path.insert(0, str(PROJECT_ROOT))
+from src.config import EVAL_DATASET_PATH, BENCHMARK_RESULTS_PATH, REPORTS_DIR
+from src.pipeline import FinancialRAGPipeline
+from evaluation.metrics import RAGEvaluator
 
-import numpy as np
-from tabulate import tabulate
-
-from src.config import EVAL_DATASET_PATH, DATA_DIR
-from src.pipeline import CandidateFitRAGPipeline
-from evaluation.metrics import (
-    compute_hit_rate_at_k,
-    compute_reciprocal_rank,
-    compute_precision_at_k,
-    evaluate_refusal
-)
-
-
-def load_eval_dataset(eval_path: Path = None) -> List[Dict[str, Any]]:
-    path = eval_path or EVAL_DATASET_PATH
-    with open(path, "r", encoding="utf-8") as f:
+def load_eval_dataset() -> List[Dict[str, Any]]:
+    with open(EVAL_DATASET_PATH, "r", encoding="utf-8") as f:
         return json.load(f)
 
+def run_evaluation_suite() -> Dict[str, Any]:
+    dataset = load_eval_dataset()
+    in_corpus_items = [item for item in dataset if item["is_in_corpus"]]
+    out_of_corpus_items = [item for item in dataset if not item["is_in_corpus"]]
 
-def run_single_experiment(
-    eval_dataset: List[Dict[str, Any]],
-    chunking_strategy: str = "section_aware",
-    retrieval_mode: str = "hybrid",
-    enable_reranking: bool = True
-) -> Dict[str, Any]:
-    """
-    Evaluates one specific architectural configuration across all labeled queries.
-    """
-    pipeline = CandidateFitRAGPipeline(
-        chunking_strategy=chunking_strategy,
-        prefer_sentence_transformer=True
-    )
-    pipeline.build_index()
-
-    answerable_items = [item for item in eval_dataset if item["is_answerable"]]
-    unanswerable_items = [item for item in eval_dataset if not item["is_answerable"]]
-
-    hit_at_1_list = []
-    hit_at_3_list = []
-    hit_at_5_list = []
-    mrr_list = []
-    precision_at_3_list = []
-    latency_list = []
-
-    # 1. Evaluate answerable retrieval quality
-    for item in answerable_items:
-        query = item["query"]
-        target_cand = item["target_candidate"]
-        keywords = item.get("ground_truth_keywords", [])
-
-        start_time = time.perf_counter()
-        # Retrieve chunks
-        raw_results = pipeline.retriever.retrieve(
-            query=query,
-            top_k=pipeline.vector_store.get_total_chunks(),
-            mode=retrieval_mode
-        )
-
-        if enable_reranking and raw_results:
-            reranked = pipeline.reranker.rerank(
-                query=query,
-                initial_results=raw_results[:6],
-                top_n=5
-            )
-            retrieved_chunks = [r.chunk for r in reranked]
-        else:
-            retrieved_chunks = [r.chunk for r in raw_results[:5]]
-
-        latency_ms = (time.perf_counter() - start_time) * 1000.0
-        latency_list.append(latency_ms)
-
-        hit_1 = compute_hit_rate_at_k(retrieved_chunks, target_cand, keywords, k=1)
-        hit_3 = compute_hit_rate_at_k(retrieved_chunks, target_cand, keywords, k=3)
-        hit_5 = compute_hit_rate_at_k(retrieved_chunks, target_cand, keywords, k=5)
-        rr = compute_reciprocal_rank(retrieved_chunks, target_cand, keywords, max_k=5)
-        p_3 = compute_precision_at_k(retrieved_chunks, target_cand, keywords, k=3)
-
-        hit_at_1_list.append(hit_1)
-        hit_at_3_list.append(hit_3)
-        hit_at_5_list.append(hit_5)
-        mrr_list.append(rr)
-        precision_at_3_list.append(p_3)
-
-    # 2. Evaluate refusal safety on unanswerable queries
-    refusal_correct_count = 0
-    for item in unanswerable_items:
-        response = pipeline.query(
-            question=item["query"],
-            retrieval_mode=retrieval_mode,
-            enable_reranking=enable_reranking
-        )
-        if evaluate_refusal(is_answerable=False, response=response):
-            refusal_correct_count += 1
-
-    refusal_accuracy = (refusal_correct_count / max(len(unanswerable_items), 1)) * 100.0
-
-    return {
-        "chunking_strategy": chunking_strategy,
-        "retrieval_mode": retrieval_mode,
-        "reranking_enabled": enable_reranking,
-        "eval_samples_answerable": len(answerable_items),
-        "eval_samples_unanswerable": len(unanswerable_items),
-        "hit_rate_at_1": float(np.mean(hit_at_1_list)),
-        "hit_rate_at_3": float(np.mean(hit_at_3_list)),
-        "hit_rate_at_5": float(np.mean(hit_at_5_list)),
-        "mrr_at_5": float(np.mean(mrr_list)),
-        "precision_at_3": float(np.mean(precision_at_3_list)),
-        "refusal_accuracy": float(refusal_accuracy),
-        "avg_retrieval_latency_ms": float(np.mean(latency_list))
-    }
-
-
-def run_full_benchmark_suite() -> Dict[str, Any]:
-    """Runs comparative experiments matching the candidate evaluation protocol."""
-    eval_dataset = load_eval_dataset()
-
-    print(f"\n=======================================================")
-    print(f" CandidateFit-RAG: Benchmark Evaluation Suite")
-    print(f" Total Evaluation Questions: {len(eval_dataset)}")
-    print(f"=======================================================\n")
-
-    experiments = [
-        # Baseline: Fixed window, pure dense, no reranking
+    configurations = [
         {
-            "name": "Fixed-Window + Dense (Tutorial Baseline)",
-            "chunking": "fixed_window",
-            "mode": "dense_only",
-            "rerank": False
+            "name": "Baseline (Fixed-Window + Dense)",
+            "use_section_chunker": False,
+            "use_hybrid": False,
+            "use_reranker": False
         },
-        # Experiment 2: Fixed window + Hybrid RRF
         {
-            "name": "Fixed-Window + Hybrid RRF",
-            "chunking": "fixed_window",
-            "mode": "hybrid",
-            "rerank": False
+            "name": "Section-Aware + Dense",
+            "use_section_chunker": True,
+            "use_hybrid": False,
+            "use_reranker": False
         },
-        # Experiment 3: Section-Aware + Hybrid RRF (No Rerank)
         {
-            "name": "Section-Aware + Hybrid RRF (No Rerank)",
-            "chunking": "section_aware",
-            "mode": "hybrid",
-            "rerank": False
+            "name": "Section-Aware + Hybrid (BM25+Dense)",
+            "use_section_chunker": True,
+            "use_hybrid": True,
+            "use_reranker": False
         },
-        # Full Production Pipeline: Section-Aware + Hybrid RRF + Cross-Encoder Rerank
         {
-            "name": "Section-Aware + Hybrid RRF + Reranker (Production)",
-            "chunking": "section_aware",
-            "mode": "hybrid",
-            "rerank": True
+            "name": "Production (Hybrid + Cross-Encoder)",
+            "use_section_chunker": True,
+            "use_hybrid": True,
+            "use_reranker": True
         }
     ]
 
-    benchmark_records = []
-    table_rows = []
+    all_results = {}
 
-    for exp in experiments:
-        print(f"Running experiment: {exp['name']}...")
-        result = run_single_experiment(
-            eval_dataset=eval_dataset,
-            chunking_strategy=exp["chunking"],
-            retrieval_mode=exp["mode"],
-            enable_reranking=exp["rerank"]
+    print(f"\n=======================================================")
+    print(f"Starting Financial RAG Benchmark ({len(dataset)} Questions)")
+    print(f"In-Corpus: {len(in_corpus_items)} | Out-of-Corpus Traps: {len(out_of_corpus_items)}")
+    print(f"=======================================================\n")
+
+    for cfg in configurations:
+        cfg_name = cfg["name"]
+        print(f"Evaluating Configuration: {cfg_name}...")
+
+        pipeline = FinancialRAGPipeline(
+            use_section_chunker=cfg["use_section_chunker"],
+            use_hybrid=cfg["use_hybrid"],
+            use_reranker=cfg["use_reranker"],
+            prefer_neural=True
         )
-        result["configuration_name"] = exp["name"]
-        benchmark_records.append(result)
+        pipeline.load_and_index(REPORTS_DIR)
 
-        table_rows.append([
-            exp["name"],
-            f"{result['hit_rate_at_1'] * 100:.1f}%",
-            f"{result['hit_rate_at_3'] * 100:.1f}%",
-            f"{result['mrr_at_5']:.3f}",
-            f"{result['precision_at_3'] * 100:.1f}%",
-            f"{result['refusal_accuracy']:.1f}%",
-            f"{result['avg_retrieval_latency_ms']:.1f}ms"
-        ])
+        hit_1_list = []
+        hit_3_list = []
+        mrr_5_list = []
+        p_3_list = []
+        kw_recall_list = []
+        latencies = []
 
-    headers = [
-        "Architecture Configuration",
-        "Hit@1",
-        "Hit@3 (Recall@3)",
-        "MRR@5",
-        "Precision@3",
-        "Refusal Acc",
-        "Latency"
-    ]
+        # Evaluate on in-corpus factual queries
+        for item in in_corpus_items:
+            q = item["question"]
+            target = item["target_company"]
+            kws = item.get("expected_keywords", [])
 
-    print("\n" + tabulate(table_rows, headers=headers, tablefmt="github") + "\n")
+            t0 = time.perf_counter()
+            res = pipeline.query(q, top_k=5)
+            lat_ms = (time.perf_counter() - t0) * 1000.0
+            latencies.append(lat_ms)
 
-    # Save results to JSON for Streamlit UI and README embedding
-    output_path = DATA_DIR / "evaluation" / "benchmark_results.json"
-    with open(output_path, "w", encoding="utf-8") as f:
-        json.dump(benchmark_records, f, indent=2)
+            retrieved = res["retrieved_chunks"]
+            hit_1_list.append(RAGEvaluator.calculate_hit_rate(retrieved, target, k=1))
+            hit_3_list.append(RAGEvaluator.calculate_hit_rate(retrieved, target, k=3))
+            mrr_5_list.append(RAGEvaluator.calculate_reciprocal_rank(retrieved, target, max_k=5))
+            p_3_list.append(RAGEvaluator.calculate_precision_at_k(retrieved, target, k=3))
+            kw_recall_list.append(RAGEvaluator.check_keyword_recall(retrieved, kws, k=3))
 
-    print(f"Benchmark results saved to: {output_path}")
-    return {"results": benchmark_records, "summary_table": table_rows}
+        # Evaluate refusal accuracy on out-of-corpus adversarial traps
+        refusals = 0
+        for item in out_of_corpus_items:
+            q = item["question"]
+            res = pipeline.query(q, top_k=3)
+            if res["is_refusal"]:
+                refusals += 1
 
+        refusal_accuracy = (refusals / len(out_of_corpus_items)) if out_of_corpus_items else 1.0
+
+        metrics = {
+            "hit_at_1": round(sum(hit_1_list) / len(hit_1_list), 4),
+            "hit_at_3": round(sum(hit_3_list) / len(hit_3_list), 4),
+            "mrr_at_5": round(sum(mrr_5_list) / len(mrr_5_list), 4),
+            "precision_at_3": round(sum(p_3_list) / len(p_3_list), 4),
+            "keyword_recall_at_3": round(sum(kw_recall_list) / len(kw_recall_list), 4),
+            "refusal_accuracy": round(refusal_accuracy, 4),
+            "avg_latency_ms": round(sum(latencies) / len(latencies), 2)
+        }
+
+        all_results[cfg_name] = metrics
+        print(f"  -> Hit@1: {metrics['hit_at_1']*100:.1f}% | Recall@3: {metrics['hit_at_3']*100:.1f}% | MRR@5: {metrics['mrr_at_5']:.3f} | Refusal: {metrics['refusal_accuracy']*100:.1f}% | Latency: {metrics['avg_latency_ms']}ms")
+
+    # Serialize to JSON
+    with open(BENCHMARK_RESULTS_PATH, "w", encoding="utf-8") as f:
+        json.dump(all_results, f, indent=2)
+
+    print(f"\nBenchmark complete. Saved results to {BENCHMARK_RESULTS_PATH}\n")
+    return all_results
 
 if __name__ == "__main__":
-    run_full_benchmark_suite()
+    run_evaluation_suite()

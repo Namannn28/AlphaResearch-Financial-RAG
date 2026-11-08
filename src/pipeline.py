@@ -1,197 +1,159 @@
 """
-End-to-End Pipeline Orchestrator for CandidateFit-RAG.
-
-Coordinates document ingestion, chunking, embedding, vector & lexical indexing,
-hybrid retrieval, cross-encoder re-ranking, and grounded generation.
+Unified End-to-End Pipeline for Financial Research Assistant RAG.
+Orchestrates ingestion, indexing, hybrid retrieval, cross-encoder reranking,
+refusal checks, and citation-backed answer generation.
 """
 
 from typing import List, Dict, Any, Optional
 import time
-import logging
+from pathlib import Path
 
-from src.config import RESUMES_DIR, retrieval_config
-from src.ingestion import load_corpus_from_directory, Document
-from src.chunking import build_chunks, Chunk
-from src.embeddings import get_embedder, BaseEmbedder
-from src.vector_store import InMemoryVectorStore
-from src.lexical_search import BM25LexicalSearcher
-from src.hybrid_retriever import HybridRetriever, RetrievalResult
-from src.reranker import CrossEncoderReranker, RerankResult
-from src.generator import GroundedGenerator, GenerationResponse
+from src.config import config, REPORTS_DIR
+from src.ingestion import DocumentIngestionEngine, FinancialDocument
+from src.chunking import SectionAwareFinancialChunker, FixedWindowChunker, FinancialChunk
+from src.embeddings import FinancialEmbeddingEngine
+from src.vector_store import FinancialVectorStore
+from src.lexical_search import BM25OkapiRetriever
+from src.hybrid_retriever import HybridFinancialRetriever
+from src.reranker import FinancialCrossEncoderReranker
+from src.llm_client import FinancialLLMClient
 
-logger = logging.getLogger(__name__)
+class FinancialRAGPipeline:
+    """Production Financial RAG Pipeline for Company 10-K Analysis."""
 
-
-class CandidateFitRAGPipeline:
-    """
-    Production-structured RAG pipeline for candidate resume & job fit intelligence.
-    """
     def __init__(
         self,
-        chunking_strategy: str = "section_aware",
-        prefer_sentence_transformer: bool = True
+        use_section_chunker: bool = True,
+        use_hybrid: bool = True,
+        use_reranker: bool = True,
+        prefer_neural: bool = True,
+        llm_provider: str = "mistral"
     ):
-        self.chunking_strategy = chunking_strategy
-        self.documents: List[Document] = []
-        self.chunks: List[Chunk] = []
+        self.use_section_chunker = use_section_chunker
+        self.use_hybrid = use_hybrid
+        self.use_reranker = use_reranker
+        self.prefer_neural = prefer_neural
 
-        # Core subsystems
-        self.embedder: BaseEmbedder = get_embedder(prefer_sentence_transformer=prefer_sentence_transformer)
-        self.vector_store = InMemoryVectorStore()
-        self.lexical_searcher = BM25LexicalSearcher()
-        self.retriever = HybridRetriever(
-            embedder=self.embedder,
-            vector_store=self.vector_store,
-            lexical_searcher=self.lexical_searcher
+        # Component Initialization
+        self.ingestion_engine = DocumentIngestionEngine()
+        self.chunker = SectionAwareFinancialChunker() if use_section_chunker else FixedWindowChunker()
+        self.embedding_engine = FinancialEmbeddingEngine(
+            model_name=config.embedding_model_name,
+            prefer_sentence_transformer=prefer_neural
         )
-        self.reranker = CrossEncoderReranker(enable_model=prefer_sentence_transformer)
-        self.generator = GroundedGenerator()
+        self.vector_store = FinancialVectorStore()
+        self.bm25_retriever = BM25OkapiRetriever()
+        self.hybrid_retriever = HybridFinancialRetriever(
+            vector_store=self.vector_store,
+            bm25_retriever=self.bm25_retriever,
+            embedding_engine=self.embedding_engine,
+            rrf_constant=config.rrf_constant
+        )
+        self.reranker = FinancialCrossEncoderReranker(
+            model_name=config.reranker_model_name,
+            enable_neural=prefer_neural
+        )
+        self.llm_client = FinancialLLMClient(
+            mistral_api_key=config.mistral_api_key,
+            groq_api_key=config.groq_api_key,
+            provider=llm_provider
+        )
 
+        self.documents: List[FinancialDocument] = []
+        self.chunks: List[FinancialChunk] = []
         self.is_indexed = False
 
-    def build_index(self, resumes_dir=None):
-        """
-        Loads candidate resumes, segments into chunks, generates embeddings,
-        and initializes both vector and BM25 indices.
-        """
-        target_dir = resumes_dir or RESUMES_DIR
-        logger.info("Ingesting candidate resumes from %s...", target_dir)
-        self.documents = load_corpus_from_directory(target_dir)
+    def load_and_index(self, reports_dir: Optional[Path] = None):
+        """Loads all reports from folder, chunks them, and builds indices."""
+        target_dir = reports_dir or REPORTS_DIR
+        self.documents = self.ingestion_engine.load_all_reports(target_dir)
 
-        logger.info("Chunking %d documents using '%s' strategy...", len(self.documents), self.chunking_strategy)
-        self.chunks = build_chunks(self.documents, strategy=self.chunking_strategy)
+        all_chunks: List[FinancialChunk] = []
+        for doc in self.documents:
+            doc_chunks = self.chunker.chunk_document(doc)
+            all_chunks.extend(doc_chunks)
 
-        logger.info("Generating embeddings for %d chunks (dim=%d)...", len(self.chunks), self.embedder.dimension)
+        self.chunks = all_chunks
+
+        # 1. Index BM25
+        self.bm25_retriever.index_chunks(self.chunks)
+
+        # 2. Index Vector Store
         chunk_texts = [c.text for c in self.chunks]
-        embeddings = self.embedder.embed_texts(chunk_texts)
-
-        # Index into vector store
+        embeddings = self.embedding_engine.embed_texts(chunk_texts)
         self.vector_store.clear()
         self.vector_store.add_chunks(self.chunks, embeddings)
 
-        # Index into BM25 lexical ranker
-        self.lexical_searcher.index_chunks(self.chunks)
-
         self.is_indexed = True
-        logger.info("CandidateFit-RAG index built successfully (%d chunks).", len(self.chunks))
 
     def query(
         self,
         question: str,
-        candidate_name_filter: Optional[str] = None,
-        retrieval_mode: str = "hybrid",
-        enable_reranking: bool = True
-    ) -> GenerationResponse:
-        """
-        Executes an end-to-end question answering query.
-        
-        Steps:
-        1. Retrieval (Hybrid / Dense / BM25) -> top-K
-        2. Re-Ranking (Cross-Encoder) -> top-N
-        3. Generation & Refusal Guardrail -> GenerationResponse
-        """
-        if not self.is_indexed:
-            self.build_index()
-
-        retrieval_start = time.perf_counter()
-
-        # Step 1: Initial Retrieval
-        initial_top_k = retrieval_config.initial_top_k
-        raw_results = self.retriever.retrieve(
-            query=question,
-            top_k=initial_top_k,
-            mode=retrieval_mode,
-            candidate_name_filter=candidate_name_filter
-        )
-
-        # Step 2: Re-ranking
-        if enable_reranking and raw_results:
-            reranked_results = self.reranker.rerank(
-                query=question,
-                initial_results=raw_results,
-                top_n=retrieval_config.rerank_top_n
-            )
-        else:
-            # Wrap raw results without rank change
-            reranked_results = [
-                RerankResult(
-                    chunk=res.chunk,
-                    initial_rank=i + 1,
-                    reranked_rank=i + 1,
-                    initial_score=res.score,
-                    rerank_score=res.score,
-                    rank_lift=0
-                )
-                for i, res in enumerate(raw_results[:retrieval_config.rerank_top_n])
-            ]
-
-        retrieval_latency_ms = (time.perf_counter() - retrieval_start) * 1000.0
-
-        # Step 3: Grounded Answer Generation
-        response = self.generator.generate(
-            query=question,
-            reranked_results=reranked_results,
-            retrieval_latency_ms=retrieval_latency_ms
-        )
-
-        return response
-
-    def match_candidate_against_job(
-        self,
-        job_description_text: str,
-        candidate_name: str
+        filter_company: Optional[str] = None,
+        top_k: int = 3
     ) -> Dict[str, Any]:
         """
-        Extracts key requirements from a job description and audits candidate alignment.
-        Returns matching evidence and missing skill gaps.
+        Executes end-to-end query workflow:
+        1. Hybrid retrieval (Dense + BM25)
+        2. Cross-Encoder reranking
+        3. Confidence assessment & refusal guardrail
+        4. LLM synthesis with citations
         """
         if not self.is_indexed:
-            self.build_index()
+            self.load_and_index()
 
-        # Extract requirement lines
-        req_lines = [
-            line.strip().lstrip("-*• ")
-            for line in job_description_text.split("\n")
-            if line.strip() and not line.startswith("#") and len(line.strip()) > 15
-        ][:6]
+        start_time = time.perf_counter()
 
-        evaluations = []
-        overall_scores = []
-
-        for req in req_lines:
-            resp = self.query(
-                question=f"Does {candidate_name} have experience with: {req}?",
-                candidate_name_filter=candidate_name,
-                retrieval_mode="hybrid"
+        # Step 1: Retrieval
+        if self.use_hybrid:
+            initial_hits = self.hybrid_retriever.retrieve(
+                query=question,
+                top_k=config.retrieval_top_k,
+                filter_company=filter_company
             )
-            has_evidence = not resp.is_refusal and resp.confidence_score >= retrieval_config.confidence_refusal_threshold
-            evaluations.append({
-                "requirement": req,
-                "has_evidence": has_evidence,
-                "confidence": resp.confidence_score,
-                "answer": resp.answer,
-                "citations": resp.citations
-            })
-            if has_evidence:
-                overall_scores.append(resp.confidence_score)
+        else:
+            # Dense only baseline
+            q_vec = self.embedding_engine.embed_query(question)
+            initial_hits = self.vector_store.similarity_search(
+                q_vec,
+                top_k=config.retrieval_top_k,
+                filter_company=filter_company
+            )
 
-        alignment_percentage = (len(overall_scores) / max(len(req_lines), 1)) * 100.0
+        # Step 2: Reranking
+        if self.use_reranker and initial_hits:
+            final_hits = self.reranker.rerank(
+                query=question,
+                candidate_hits=initial_hits,
+                top_k=top_k
+            )
+        else:
+            final_hits = initial_hits[:top_k]
+
+        retrieval_latency_ms = (time.perf_counter() - start_time) * 1000.0
+
+        # Step 3: Top confidence
+        top_confidence = final_hits[0]["score"] if final_hits else 0.0
+
+        # Step 4: Answer generation
+        generation_start = time.perf_counter()
+        gen_result = self.llm_client.generate_answer(
+            query=question,
+            retrieved_chunks=final_hits,
+            confidence_score=top_confidence,
+            confidence_threshold=config.confidence_threshold
+        )
+        generation_latency_ms = (time.perf_counter() - generation_start) * 1000.0
 
         return {
-            "candidate_name": candidate_name,
-            "requirements_evaluated": len(req_lines),
-            "requirements_met": len(overall_scores),
-            "alignment_percentage": round(alignment_percentage, 1),
-            "evaluations": evaluations
-        }
-
-    def get_corpus_statistics(self) -> Dict[str, Any]:
-        """Provides operational metrics regarding the active index."""
-        candidate_names = sorted(list({d.metadata.get("candidate_name") for d in self.documents}))
-        return {
-            "total_documents": len(self.documents),
-            "total_chunks": len(self.chunks),
-            "chunking_strategy": self.chunking_strategy,
-            "embedding_dimension": self.embedder.dimension,
-            "candidate_names": candidate_names
+            "question": question,
+            "answer": gen_result["answer"],
+            "is_refusal": gen_result["is_refusal"],
+            "provider_used": gen_result["provider_used"],
+            "citations": gen_result["citations"],
+            "top_confidence": top_confidence,
+            "retrieval_latency_ms": retrieval_latency_ms,
+            "generation_latency_ms": generation_latency_ms,
+            "total_latency_ms": retrieval_latency_ms + generation_latency_ms,
+            "retrieved_chunks": final_hits
         }
