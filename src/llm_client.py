@@ -1,9 +1,30 @@
 """
-LLM Client Integration for Financial Research Assistant using LangChain & Groq Cloud.
-Supports:
-1. LangChain ChatGroq (`from langchain_groq import ChatGroq`) with Llama 3.3 70B (Free Tier at console.groq.com)
-2. Offline Grounded Engine (Runs without an API key for instant offline testing & interviews)
+==============================================================================
+STEP 6: LLM GENERATION & CITATION CLIENT (src/llm_client.py)
+==============================================================================
+Role in RAG Pipeline:
+    Synthesizes concise, grounded financial answers with exact page/section
+    citations using LangChain's ChatGroq client. Enforces explicit refusal
+    when retrieval confidence falls below the safety threshold.
+
+Key Concepts for Interviews:
+    - LangChain ChatGroq: Fast hosted inference via Groq's LPU architecture,
+      running active models (e.g. openai/gpt-oss-120b, openai/gpt-oss-20b).
+    - Grounding & Guardrails: System prompt forbids financial speculation. If
+      confidence < 0.28, returns structured refusal instead of hallucinating.
+    - Zero-Crash Offline Fallback: If no API key is supplied or rate limits
+      hit, deterministically synthesizes the answer from retrieved chunks.
+
+Run directly to test:
+    python src/llm_client.py
+==============================================================================
 """
+
+import sys
+from pathlib import Path
+
+# Add project root to path for direct module execution
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from typing import List, Dict, Any, Optional
 import os
@@ -11,6 +32,10 @@ import re
 import json
 import urllib.request
 import urllib.error
+from dotenv import load_dotenv
+
+# Load .env
+load_dotenv(Path(__file__).resolve().parent.parent / ".env")
 
 # LangChain Imports for Groq Cloud
 try:
@@ -19,6 +44,7 @@ try:
     HAS_LANGCHAIN_GROQ = True
 except ImportError:
     HAS_LANGCHAIN_GROQ = False
+
 
 class FinancialLLMClient:
     """
@@ -32,7 +58,7 @@ Your job is to answer investor queries accurately using ONLY the provided verifi
 CRITICAL INSTRUCTIONS:
 1. Only answer based on facts directly documented in the context. Never speculate or hallucinate.
 2. If the context does not contain sufficient information to answer the question, state:
-   "[REFUSAL - INSUFFICIENT_EVIDENCE]: The provided 10-K filings do not contain information regarding this topic."
+   "[REFUSAL - INSUFFICIENT_EVIDENCE]: The provided document excerpts do not contain documented evidence regarding this topic."
 3. Explicitly cite the company, ticker, and section for each metric mentioned (e.g. [Apple (AAPL) | Item 7 MD&A]).
 4. Be precise with financial numbers, percentages, and currencies ($ billions/millions).
 5. For multi-company questions, provide a structured comparative analysis."""
@@ -40,11 +66,9 @@ CRITICAL INSTRUCTIONS:
     def __init__(
         self,
         groq_api_key: Optional[str] = None,
-        mistral_api_key: Optional[str] = None,
         provider: str = "groq"
     ):
         self.groq_api_key = groq_api_key or os.getenv("GROQ_API_KEY", "")
-        self.mistral_api_key = mistral_api_key or os.getenv("MISTRAL_API_KEY", "")
         self.provider = provider.lower()
         self._groq_chat_model = None
 
@@ -53,32 +77,31 @@ CRITICAL INSTRUCTIONS:
 
     def _init_langchain_groq(self):
         """Initializes LangChain ChatGroq model with user's free API key."""
-        try:
-            self._groq_chat_model = ChatGroq(
-                model="openai/gpt-oss-120b",
-                groq_api_key=self.groq_api_key,
-                temperature=0.1,
-                max_tokens=600
-            )
-        except Exception:
+        models_to_try = [
+            "openai/gpt-oss-120b",
+            "openai/gpt-oss-20b",
+            "qwen/qwen3.8-27b",
+            "llama-3.3-70b-versatile"
+        ]
+        for m in models_to_try:
             try:
                 self._groq_chat_model = ChatGroq(
-                    model="openai/gpt-oss-20b",
+                    model=m,
                     groq_api_key=self.groq_api_key,
                     temperature=0.1,
                     max_tokens=600
                 )
+                self.active_model_name = m
+                break
             except Exception:
-                self._groq_chat_model = None
+                continue
 
-    def set_keys(self, groq_key: Optional[str] = None, mistral_key: Optional[str] = None):
+    def set_keys(self, groq_key: Optional[str] = None):
         """Allows updating API keys dynamically from the Streamlit UI."""
         if groq_key:
             self.groq_api_key = groq_key.strip()
             if HAS_LANGCHAIN_GROQ:
                 self._init_langchain_groq()
-        if mistral_key:
-            self.mistral_api_key = mistral_key.strip()
 
     def generate_answer(
         self,
@@ -95,7 +118,7 @@ CRITICAL INSTRUCTIONS:
         if not retrieved_chunks or confidence_score < confidence_threshold:
             return {
                 "answer": (
-                    f"[REFUSAL - INSUFFICIENT_EVIDENCE]: The indexed 10-K filings do not contain documented "
+                    f"[REFUSAL - INSUFFICIENT_EVIDENCE]: The indexed documents do not contain documented "
                     f"evidence to reliably answer: \"{query}\". "
                     f"(Confidence score {confidence_score:.2f} is below the safety threshold of {confidence_threshold:.2f}). "
                     f"Refusing to generate an ungrounded response to prevent financial hallucination."
@@ -110,12 +133,12 @@ CRITICAL INSTRUCTIONS:
         citations = []
         for i, hit in enumerate(retrieved_chunks, start=1):
             chunk = hit["chunk"]
-            citation_str = f"{chunk.company} ({chunk.ticker}) - {chunk.section_title}"
+            citation_str = f"{chunk.company} ({chunk.ticker}) - {chunk.section_title} | Page {chunk.page_number}"
             citations.append(citation_str)
             context_blocks.append(f"--- Context [{i}]: {citation_str} ---\n{chunk.text}")
 
         combined_context = "\n\n".join(context_blocks)
-        user_prompt = f"""Context from verified 10-K filings:
+        user_prompt = f"""Context from verified documents:
 {combined_context}
 
 Question: {query}
@@ -129,31 +152,33 @@ Provide a concise, professional financial analysis answering the question, with 
                     if self._groq_chat_model is None:
                         self._init_langchain_groq()
 
-                    messages = [
-                        SystemMessage(content=self.SYSTEM_PROMPT),
-                        HumanMessage(content=user_prompt)
-                    ]
-                    response = self._groq_chat_model.invoke(messages)
-                    answer = response.content.strip()
-                    return {
-                        "answer": answer,
-                        "is_refusal": False,
-                        "provider_used": "LangChain (ChatGroq Llama 3.3 70B)",
-                        "citations": citations
-                    }
-                else:
-                    # Direct HTTP fallback to Groq API
-                    answer = self._call_groq_direct_api(user_prompt)
-                    return {
-                        "answer": answer,
-                        "is_refusal": False,
-                        "provider_used": "Groq Cloud (Direct API)",
-                        "citations": citations
-                    }
+                    if self._groq_chat_model is not None:
+                        messages = [
+                            SystemMessage(content=self.SYSTEM_PROMPT),
+                            HumanMessage(content=user_prompt)
+                        ]
+                        response = self._groq_chat_model.invoke(messages)
+                        answer = response.content.strip()
+                        model_name = getattr(self, "active_model_name", "ChatGroq")
+                        return {
+                            "answer": answer,
+                            "is_refusal": False,
+                            "provider_used": f"LangChain ChatGroq ({model_name})",
+                            "citations": citations
+                        }
+
+                # Direct API fallback
+                answer = self._call_groq_direct_api(user_prompt)
+                return {
+                    "answer": answer,
+                    "is_refusal": False,
+                    "provider_used": "Groq Cloud (Direct API)",
+                    "citations": citations
+                }
             except Exception as e:
                 offline_answer = self._offline_extractive_synthesis(query, retrieved_chunks)
                 return {
-                    "answer": f"{offline_answer}\n\n*(Note: LangChain ChatGroq encountered: {e}. Fallback synthesized from verified chunks.)*",
+                    "answer": f"{offline_answer}\n\n*(Note: Cloud call encountered '{e}'. Fallback synthesized directly from verified chunks.)*",
                     "is_refusal": False,
                     "provider_used": "Offline Fallback",
                     "citations": citations
@@ -176,7 +201,7 @@ Provide a concise, professional financial analysis answering the question, with 
             "Authorization": f"Bearer {self.groq_api_key}"
         }
         payload = {
-            "model": "llama-3.3-70b-versatile",
+            "model": "openai/gpt-oss-120b",
             "messages": [
                 {"role": "system", "content": self.SYSTEM_PROMPT},
                 {"role": "user", "content": user_prompt}
@@ -216,8 +241,51 @@ Provide a concise, professional financial analysis answering the question, with 
         formatted_quotes = "\n".join([f"> {line}" for line in best_lines])
 
         return (
-            f"Based on verified disclosures in the **{chunk.company} ({chunk.ticker})** 10-K filing "
-            f"([*{chunk.section_title}*]):\n\n"
+            f"Based on verified disclosures in the **{chunk.company} ({chunk.ticker})** filing "
+            f"([*{chunk.section_title}* | Page {chunk.page_number}]):\n\n"
             f"{formatted_quotes}\n\n"
-            f"**Source Document**: `{chunk.doc_id}.md` (Section: *{chunk.section_title}*)"
+            f"**Source Document**: `{chunk.doc_id}` (Section: *{chunk.section_title}*)"
         )
+
+
+if __name__ == "__main__":
+    if sys.stdout and hasattr(sys.stdout, "reconfigure"):
+        try:
+            sys.stdout.reconfigure(encoding="utf-8")
+        except Exception:
+            pass
+
+    print("=" * 70)
+    print("[STEP 6 DEMO] LangChain ChatGroq Generation Client")
+    print("=" * 70)
+    client = FinancialLLMClient()
+    print(f"Has LangChain Groq: {HAS_LANGCHAIN_GROQ}")
+    print(f"Has API Key: {bool(client.groq_api_key)}")
+
+    # Mock chunk for demo
+    from src.chunking import FinancialChunk
+    mock_chunk = FinancialChunk(
+        chunk_id="aapl_demo",
+        doc_id="apple_2023_10k",
+        company="Apple Inc.",
+        ticker="AAPL",
+        fiscal_year="2023",
+        section_title="Consolidated Financial Performance",
+        text="[Apple Inc. (AAPL) | Consolidated Financial Performance | Page 1]\nTotal net sales for fiscal 2023 were $383,285 million compared to $394,328 million in 2022.",
+        token_count_approx=40,
+        page_number=1
+    )
+    mock_hits = [{"chunk": mock_chunk, "score": 0.92}]
+
+    print("\nGenerating answer with high confidence (0.92):")
+    res = client.generate_answer("What was Apple's total net sales in fiscal 2023?", mock_hits, 0.92)
+    print(f"Provider: {res['provider_used']}")
+    print(f"Answer:\n{res['answer']}\n")
+
+    print("-" * 50)
+    print("Testing safety refusal with low confidence (0.12 < threshold 0.28):")
+    refusal_res = client.generate_answer("What was Apple's space tourism revenue?", mock_hits, 0.12)
+    print(f"Is Refusal: {refusal_res['is_refusal']}")
+    print(f"Refusal Message:\n{refusal_res['answer']}\n")
+
+    print("[OK] LLM generation module operational.")

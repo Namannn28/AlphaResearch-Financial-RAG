@@ -1,13 +1,40 @@
+r"""
+==============================================================================
+STEP 4A: BM25 LEXICAL RETRIEVER (src/lexical_search.py)
+==============================================================================
+Role in RAG Pipeline:
+    Builds an inverted index and computes BM25Okapi relevance scores for queries.
+    Captures exact keyword occurrences, ticker symbols (AAPL, MSFT, TSLA),
+    specific currency figures ($383,285 million), and percentages (44.1%).
+
+Key Concepts for Interviews:
+    - Why Dense Vectors aren't enough: Vector embeddings compress text into a
+      continuous semantic space. They often fail to distinguish between
+      "$383.29B" and "$393.29B", or between tickers like "GOOG" and "GOOGL".
+    - BM25Okapi: Industry-standard probabilistic lexical scoring algorithm:
+      $$\text{IDF}(q_i) = \ln\left(\frac{N - n(q_i) + 0.5}{n(q_i) + 0.5} + 1\right)$$
+      Balancing term frequency (TF) saturation with document length normalization.
+    - Financial Tokenizer: Custom regex preserves currency symbols, periods in
+      decimals, and percentage signs without truncating them.
+
+Run directly to test:
+    python src/lexical_search.py
+==============================================================================
 """
-BM25 Lexical Keyword Search for Financial Data.
-Handles exact matches for ticker symbols (AAPL, MSFT, TSLA, AMZN),
-currency metrics ($383.29 billion), and percentages (44.1%).
-"""
+
+import sys
+from pathlib import Path
+
+# Add project root to path for direct module execution
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from typing import List, Dict, Any, Optional
 import math
 import re
-from src.chunking import FinancialChunk
+from src.chunking import FinancialChunk, SectionAwareFinancialChunker
+from src.ingestion import DocumentIngestionEngine
+from src.config import REPORTS_DIR
+
 
 class BM25OkapiRetriever:
     """Standard Okapi BM25 implementation for exact keyword search."""
@@ -25,7 +52,6 @@ class BM25OkapiRetriever:
     @staticmethod
     def tokenize(text: str) -> List[str]:
         """Tokenizes text preserving financial figures, percentages, and tickers."""
-        # Keep words, currency amounts like $383.29, percentages like 44.1%, and numbers
         tokens = re.findall(r"[\$]?[a-zA-Z0-9_\.]+%?", text.lower())
         return [t for t in tokens if len(t) > 1 or t in {"$", "%"}]
 
@@ -70,7 +96,6 @@ class BM25OkapiRetriever:
             if token not in self.doc_freqs:
                 continue
 
-            # Inverse Document Frequency (IDF) with BM25 smoothing
             df = self.doc_freqs[token]
             idf = math.log(1.0 + (self.corpus_size - df + 0.5) / (df + 0.5))
 
@@ -105,3 +130,35 @@ class BM25OkapiRetriever:
                 break
 
         return results
+
+
+if __name__ == "__main__":
+    if sys.stdout and hasattr(sys.stdout, "reconfigure"):
+        try:
+            sys.stdout.reconfigure(encoding="utf-8")
+        except Exception:
+            pass
+
+    print("=" * 70)
+    print("[STEP 4A DEMO] BM25 Lexical Keyword Search")
+    print("=" * 70)
+    docs = DocumentIngestionEngine().load_all_reports(REPORTS_DIR)
+    chunks = []
+    chunker = SectionAwareFinancialChunker()
+    for d in docs:
+        chunks.extend(chunker.chunk_document(d))
+
+    retriever = BM25OkapiRetriever()
+    retriever.index_chunks(chunks)
+    print(f"BM25 index constructed over {len(chunks)} chunks.")
+    print(f"Unique vocabulary terms indexed: {len(retriever.doc_freqs)}")
+
+    test_q = "$383,285 million AAPL net sales"
+    hits = retriever.search(test_q, top_k=3)
+    print(f"\nBM25 Exact Keyword Matches for: \"{test_q}\"\n")
+    for hit in hits:
+        c = hit["chunk"]
+        print(f"  [BM25 Score: {hit['score']:.4f}] {c.company} ({c.ticker}) | {c.section_title}")
+        print(f"    Excerpt: {c.text.splitlines()[1][:120]}...\n")
+
+    print("[OK] BM25 lexical search module operational.")

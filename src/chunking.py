@@ -1,11 +1,37 @@
 """
-Document Chunking Module for Financial Research Assistant.
-Section-aware and Page-aware chunking preserving tables and metrics.
+==============================================================================
+STEP 2: SECTION-AWARE CHUNKING MODULE (src/chunking.py)
+==============================================================================
+Role in RAG Pipeline:
+    Splits ingested documents into coherent, context-rich chunks while strictly
+    preserving section titles, page markers, and financial tables. Prepend
+    metadata headers to each chunk so embeddings retain company context.
+
+Key Concepts for Interviews:
+    - Fixed-window chunking flaws: Blindly splitting every 500 tokens often
+      slices financial tables in half, severing rows from column headers.
+    - Section-Aware chunking: Splits on logical heading boundaries (Item 1,
+      MD&A, Risk Factors) and paragraphs, keeping numerical disclosures intact.
+    - Context enrichment: Every chunk begins with:
+      `[Company (Ticker) | Section Title | Page X]`
+      This prevents orphan chunks where numbers appear without their company.
+
+Run directly to test:
+    python src/chunking.py
+==============================================================================
 """
+
+import sys
+from pathlib import Path
+
+# Add project root to path for direct module execution
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from dataclasses import dataclass
 from typing import List, Dict, Any
-from src.ingestion import FinancialDocument
+from src.ingestion import FinancialDocument, DocumentIngestionEngine
+from src.config import REPORTS_DIR
+
 
 @dataclass
 class FinancialChunk:
@@ -20,6 +46,7 @@ class FinancialChunk:
     token_count_approx: int
     page_number: int = 1
 
+
 class SectionAwareFinancialChunker:
     """
     Chunks financial documents respecting section and page boundaries.
@@ -31,6 +58,7 @@ class SectionAwareFinancialChunker:
         self.min_chars = min_chars
 
     def chunk_document(self, document: FinancialDocument) -> List[FinancialChunk]:
+        """Splits a single document into section-aware chunks."""
         chunks: List[FinancialChunk] = []
         chunk_idx = 0
 
@@ -84,3 +112,33 @@ class SectionAwareFinancialChunker:
                 chunk_idx += 1
 
         return chunks
+
+
+if __name__ == "__main__":
+    if sys.stdout and hasattr(sys.stdout, "reconfigure"):
+        try:
+            sys.stdout.reconfigure(encoding="utf-8")
+        except Exception:
+            pass
+
+    print("=" * 70)
+    print("[STEP 2 DEMO] Section-Aware Chunking")
+    print("=" * 70)
+    ingestion = DocumentIngestionEngine()
+    docs = ingestion.load_all_reports(REPORTS_DIR)
+    chunker = SectionAwareFinancialChunker()
+
+    all_chunks = []
+    for doc in docs:
+        c = chunker.chunk_document(doc)
+        all_chunks.extend(c)
+        print(f"  * {doc.company}: {len(c)} chunks generated")
+
+    print(f"\nTotal Chunks Across Corpus: {len(all_chunks)}")
+    if all_chunks:
+        print("\n--- Sample Chunk Preview (First 250 Chars) ---")
+        sample = all_chunks[0]
+        print(f"Chunk ID: {sample.chunk_id}")
+        print(f"Metadata: Company={sample.company}, Section={sample.section_title}, Page={sample.page_number}")
+        print(f"Text:\n{sample.text[:250]}...\n")
+    print("[OK] Chunking module operational.")

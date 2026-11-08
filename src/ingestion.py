@@ -1,13 +1,37 @@
 """
-Document Ingestion Module for SEC 10-K Reports and Custom Documents (.pdf, .md, .txt).
-Loads documents and extracts company metadata, sections, and page numbers.
+==============================================================================
+STEP 1: DOCUMENT INGESTION ENGINE (src/ingestion.py)
+==============================================================================
+Role in RAG Pipeline:
+    Extracts raw text and metadata from SEC 10-K filings and custom documents
+    (.pdf, .md, .txt). Normalizes headings, page numbers, and company metadata
+    into standardized FinancialDocument objects.
+
+Key Concepts for Interviews:
+    - Multi-format ingestion: Extracts text, tables, and page markers from PDFs
+      using pypdf, and splits Markdown files along heading hierarchies (Item 1,
+      Item 7 MD&A, Item 1A Risk Factors).
+    - Metadata extraction: Automatically parses company names, ticker symbols,
+      and fiscal years to enable downstream metadata-filtered search.
+
+Run directly to test:
+    python src/ingestion.py
+==============================================================================
 """
 
-from dataclasses import dataclass
+import sys
 from pathlib import Path
+
+# Add project root to path for direct module execution
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+
+from dataclasses import dataclass
 from typing import List, Dict, Any, Optional
 import re
 import pypdf
+
+from src.config import REPORTS_DIR
+
 
 @dataclass
 class FinancialDocument:
@@ -19,6 +43,7 @@ class FinancialDocument:
     file_path: str
     raw_content: str
     sections: List[Dict[str, Any]]
+
 
 class DocumentIngestionEngine:
     """Loads and sanitizes financial reports and uploaded PDFs into structured memory."""
@@ -98,7 +123,6 @@ class DocumentIngestionEngine:
 
         combined_raw = "\n\n--- Page Break ---\n\n".join(full_text_pages)
 
-        # Check if first page has metadata
         if full_text_pages:
             detected = self.extract_metadata_from_header(full_text_pages[0], file_path.name)
             if detected["company"] != "Unknown":
@@ -142,7 +166,7 @@ class DocumentIngestionEngine:
         if not directory.exists():
             return documents
 
-        for file_path in directory.iterdir():
+        for file_path in sorted(directory.iterdir()):
             if file_path.suffix.lower() in [".md", ".pdf", ".txt"]:
                 try:
                     documents.append(self.load_file(file_path))
@@ -150,3 +174,23 @@ class DocumentIngestionEngine:
                     print(f"Warning: Failed to load {file_path.name}: {e}")
 
         return documents
+
+
+if __name__ == "__main__":
+    if sys.stdout and hasattr(sys.stdout, "reconfigure"):
+        try:
+            sys.stdout.reconfigure(encoding="utf-8")
+        except Exception:
+            pass
+
+    print("=" * 70)
+    print("[STEP 1 DEMO] Ingesting Financial Reports")
+    print("=" * 70)
+    engine = DocumentIngestionEngine()
+    docs = engine.load_all_reports(REPORTS_DIR)
+    print(f"Successfully loaded {len(docs)} documents from {REPORTS_DIR}:\n")
+    for doc in docs:
+        print(f"  * {doc.company} ({doc.ticker}) | FY {doc.fiscal_year} | {len(doc.sections)} sections parsed")
+        for s in doc.sections[:2]:
+            print(f"      - {s['title']} ({len(s['content'])} chars)")
+    print("\n[OK] Ingestion module operational.")

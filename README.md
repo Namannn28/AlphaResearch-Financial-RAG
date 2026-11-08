@@ -7,12 +7,13 @@
 [![Refusal Accuracy: 100%](https://img.shields.io/badge/Safety_Refusal-100%25-success.svg)]()
 [![LLM: LangChain ChatGroq](https://img.shields.io/badge/LLM-LangChain%20%7C%20ChatGroq-orange.svg)]()
 
-> **Production Engineering Philosophy**: Most beginner RAG projects are tutorial clones that run basic vector search over a random PDF and hallucinate when an answer isn't in the document. **AlphaResearch** is built as evaluated software: a financial intelligence assistant that queries and compares SEC 10-K filings and custom user-uploaded PDFs with section-aware chunking, hybrid retrieval (BM25 + Dense vector search), cross-encoder reranking, explicit hallucination refusal guardrails, and free LangChain ChatGroq LLM integration.
+> **Production Engineering Philosophy**: Most beginner RAG projects are tutorial clones that run basic vector search over a random text file and hallucinate when an answer isn't in the document. **AlphaResearch** is built as evaluated, modular software following standard Data Science Foundation Pipeline architecture: each stage is an independent, testable module (Ingestion -> Section-Aware Chunking -> Dense Embeddings -> Vector Store -> BM25 Retrieval -> Reciprocal Rank Fusion -> Cross-Encoder Reranking -> Refusal Guardrail -> LangChain ChatGroq LLM).
 
 ---
 
 ## 📌 Key Capabilities
 
+- **Modular Step-by-Step Architecture (`src/`)**: Every stage of the pipeline is isolated in its own file and can be run independently for testing or interview demonstrations.
 - **Interactive Terminal Chat (`chat.py`)**: Real-time conversational CLI pipeline with customizable system prompt, message history dictionary (`conversation_history`), and drag-and-drop PDF loading directly in the console.
 - **Interactive Streamlit Web UI (`app.py`)**: 4-tab interface featuring interactive financial Q&A, source citation drawer, PDF drag-and-drop file uploader, cross-company metric comparisons, and system architecture visualization.
 - **Live PDF Ingestion & Drag-and-Drop**: Users can drag and drop any financial report, earnings release, or textbook PDF into the terminal or web app for immediate indexing.
@@ -35,74 +36,48 @@ Unlike tutorial repos that index an arbitrary sample text file, **AlphaResearch*
 
 ---
 
-## 🏗️ System Architecture
+## 🏗️ Step-by-Step Data Science Pipeline Flow
+
+Each stage can be inspected and run individually to understand the data flow:
 
 ```
-                 ┌─────────────────────────────────────────┐
-                 │ User Query (Terminal CLI / Streamlit UI)│
-                 └───────────────────┬─────────────────────┘
-                                     │
-                     ┌───────────────┴───────────────┐
-                     ▼                               ▼
-           ┌──────────────────┐            ┌──────────────────┐
-           │ Dense Embedding  │            │   BM25 Lexical   │
-           │ MiniLM (384-dim) │            │   Exact Figures  │
-           │ ($ & Semantics)  │            │ (AAPL, $383.29B) │
-           └─────────┬────────┘            └─────────┬────────┘
-                     │ Top-12 Hits                   │ Top-12 Hits
-                     └───────────────┬───────────────┘
-                                     │
-                                     ▼
-                         ┌───────────────────────┐
-                         │ Reciprocal Rank Fusion│
-                         │  RRF = 1 / (60 + r)   │
-                         └───────────┬───────────┘
-                                     │ Top Candidates
-                                     ▼
-                         ┌───────────────────────┐
-                         │ Cross-Encoder Reranker│
-                         │  (Attention Re-score) │
-                         └───────────┬───────────┘
-                                     │
-                        Confidence < Threshold (0.28)?
-                                    ├───► YES ──► Refusal Guardrail: "INSUFFICIENT_EVIDENCE"
-                                    │
-                                    └───► NO
-                                           │ Top Grounded Chunks
-                                           ▼
-                           ┌───────────────────────────────┐
-                           │   LangChain ChatGroq LLM      │
-                           │  (Offline Extractive Fallback)│
-                           └───────────────┬───────────────┘
-                                           │
-                                           ▼
-                          Final Answer with Source Citations
+┌─────────────────────────────────────────────────────────────────────────────┐
+│ 1. INGESTION (src/ingestion.py)                                             │
+│    Loads SEC 10-K Markdown & PDFs with pypdf, parses headings and pages     │
+└──────────────────────────────────────┬──────────────────────────────────────┘
+                                       │
+┌──────────────────────────────────────▼──────────────────────────────────────┐
+│ 2. CHUNKING (src/chunking.py)                                               │
+│    Section-aware chunking preserving tables and embedding metadata headers  │
+└──────────────────────────────────────┬──────────────────────────────────────┘
+                                       │
+            ┌──────────────────────────┴──────────────────────────┐
+            ▼                                                     ▼
+┌──────────────────────────────────────┐   ┌──────────────────────────────────┐
+│ 3. DENSE EMBEDDINGS & VECTOR STORE   │   │ 4. LEXICAL RETRIEVER (BM25)      │
+│    (src/embeddings.py)               │   │    (src/lexical_search.py)       │
+│    MiniLM 384-dim normalized vectors │   │    Exact figures & tickers       │
+│    (src/vector_store.py)             │   │    ($383,285 million, AAPL)      │
+│    Cosine dot product search         │   │                                  │
+└──────────────────┬───────────────────┘   └──────────────────┬───────────────┘
+                   │                                          │
+                   └────────────────────┬─────────────────────┘
+                                        │
+┌───────────────────────────────────────▼─────────────────────────────────────┐
+│ 5. HYBRID RETRIEVAL & FUSION (src/hybrid_retriever.py)                      │
+│    Reciprocal Rank Fusion: RRF = 1 / (60 + rank)                            │
+└───────────────────────────────────────┬─────────────────────────────────────┘
+                                        │
+┌───────────────────────────────────────▼─────────────────────────────────────┐
+│ 6. CROSS-ENCODER RERANKING & GUARDRAIL (src/reranker.py)                    │
+│    Cross-attention re-score & Confidence Threshold (< 0.28 = Refusal)       │
+└───────────────────────────────────────┬─────────────────────────────────────┘
+                                        │
+┌───────────────────────────────────────▼─────────────────────────────────────┐
+│ 7. LLM GENERATION & CITATIONS (src/llm_client.py)                           │
+│    LangChain ChatGroq (openai/gpt-oss-120b) with page/section citations     │
+└─────────────────────────────────────────────────────────────────────────────┘
 ```
-
----
-
-## 💡 Key Design Decisions
-
-### 1. Section-Aware Chunking vs. Fixed Token Windows
-- Standard token splitters blindly divide text every 500 tokens, frequently cutting tabular financial balance sheets in half.
-- Our **Section-Aware Chunker** splits along 10-K Markdown headings (`Item 1`, `Item 7 MD&A`, `Item 1A Risk Factors`), keeping metric tables intact and embedding the company ticker and section title into every chunk header.
-
-### 2. Hybrid Retrieval (Dense Vector + BM25Okapi)
-- Dense embeddings (`all-MiniLM-L6-v2`) capture semantic concepts and paraphrases (e.g. *"money spent on artificial intelligence"* -> *"capital expenditures on specialized AI accelerators"*).
-- BM25 captures exact tokens that vectors often miss: ticker symbols (`AAPL`, `MSFT`, `TSLA`), exact numbers (`$383,285 million`, `18.2%`), and specific item codes.
-- Merged seamlessly via **Reciprocal Rank Fusion (RRF)**:
-  $$\text{RRF}(d) = \sum_{m \in \{\text{Dense}, \text{BM25}\}} \frac{1}{60 + \text{rank}_m(d)}$$
-
-### 3. Hallucination Refusal Guardrail
-- Baseline RAG systems answer every prompt with confident hallucinations when queried about topics outside the documents.
-- AlphaResearch applies a confidence threshold ($\tau = 0.28$) and substantive non-company topic filtering. Queries about non-existent topics (e.g. *"Tesla's commercial airline revenue"*) trigger an explicit refusal:
-  ```
-  [REFUSAL - INSUFFICIENT_EVIDENCE]: The 10-K filings do not contain documented evidence to answer '...'.
-  ```
-
-### 4. Free Groq LLM Integration & Offline Reliability
-- Integrates free **Groq Cloud** using LangChain's `ChatGroq` (`openai/gpt-oss-120b` / `openai/gpt-oss-20b`) for ultra-low latency inference using a 100% free API key from [console.groq.com/keys](https://console.groq.com/keys).
-- Includes a built-in **Offline Extractive Engine**: if no API key is supplied, the app synthesizes grounded citation-backed answers directly from the chunks. It runs immediately out of the box with zero setup hurdles.
 
 ---
 
@@ -135,13 +110,7 @@ python chat.py
 - Drag and drop any PDF into the terminal: type `load <drag-file-here>` or `load C:\path\to\document.pdf` to index it live!
 - Built-in commands: `history`, `clear`, `prompt`, `load <path>`, `exit`.
 
-### 3. Run the Simplified Single-File Pipeline (Great for 5-Min Interview Walkthroughs)
-```bash
-python simple_rag.py
-```
-A single ~220-line self-contained script demonstrating the entire RAG flow: Ingestion -> Chunking -> Hybrid Retrieval -> RRF -> Guardrail Refusal -> LangChain ChatGroq.
-
-### 4. Launch the Interactive Streamlit Web UI
+### 3. Launch the Interactive Streamlit Web UI
 ```bash
 streamlit run app.py
 ```
@@ -149,6 +118,37 @@ streamlit run app.py
 - Tab 2: **Cross-Company Comparison Matrix** (Apple vs Microsoft vs Tesla vs Alphabet vs Amazon).
 - Tab 3: **Document Management & PDF Drag-and-Drop Uploader** with instant text extraction and vector indexing.
 - Tab 4: **System Architecture & Technical Specs**.
+
+### 4. Run & Test Individual Pipeline Stages (Great for Interviews)
+Each step can be run on its own to demonstrate component functionality:
+```bash
+# Step 1: Document Ingestion
+python src/ingestion.py
+
+# Step 2: Section-Aware Chunking
+python src/chunking.py
+
+# Step 3A: SentenceTransformer Embeddings
+python src/embeddings.py
+
+# Step 3B: In-Memory Vector Store
+python src/vector_store.py
+
+# Step 4A: BM25 Lexical Keyword Search
+python src/lexical_search.py
+
+# Step 4B: Hybrid Retrieval & Reciprocal Rank Fusion (RRF)
+python src/hybrid_retriever.py
+
+# Step 5: Cross-Encoder Reranking & Guardrails
+python src/reranker.py
+
+# Step 6: LangChain ChatGroq LLM Client
+python src/llm_client.py
+
+# Step 7: Complete End-to-End Orchestration Pipeline
+python src/pipeline.py
+```
 
 ---
 
@@ -158,24 +158,22 @@ streamlit run app.py
 AlphaResearch-Financial-RAG/
 ├── data/
 │   └── financial_reports/       # SEC 10-K filings (Apple, Microsoft, Tesla, Alphabet, Amazon)
-├── src/                         # Clean, modular production architecture
+├── src/                         # Modular Data Science pipeline stages
 │   ├── config.py                # Hyperparameters, paths, and thresholds
-│   ├── ingestion.py             # Document loader, PDF parser (pypdf), and 10-K metadata
-│   ├── chunking.py              # Section-aware vs Fixed-window chunkers
-│   ├── embeddings.py            # SentenceTransformers & fast SVD backends
-│   ├── vector_store.py          # In-memory cosine vector store with company filtering
-│   ├── lexical_search.py        # BM25Okapi keyword retriever
-│   ├── hybrid_retriever.py      # Reciprocal Rank Fusion (RRF)
-│   ├── reranker.py              # Cross-Encoder re-ranker with confidence scoring
-│   ├── llm_client.py            # LangChain ChatGroq and Offline Extractive Fallback
-│   └── pipeline.py              # End-to-end Financial RAG orchestration with add_document()
+│   ├── ingestion.py             # Step 1: Document loader, PDF parser (pypdf), and 10-K metadata
+│   ├── chunking.py              # Step 2: Section-aware chunking preserving tables & headers
+│   ├── embeddings.py            # Step 3A: SentenceTransformers dense vector embeddings
+│   ├── vector_store.py          # Step 3B: In-memory cosine vector store with company filtering
+│   ├── lexical_search.py        # Step 4A: BM25Okapi exact keyword & metric retriever
+│   ├── hybrid_retriever.py      # Step 4B: Reciprocal Rank Fusion (RRF) combining Dense + BM25
+│   ├── reranker.py              # Step 5: Cross-Encoder re-ranker with confidence refusal guardrail
+│   ├── llm_client.py            # Step 6: LangChain ChatGroq client with citation formatting
+│   └── pipeline.py              # Step 7: End-to-end orchestration pipeline with add_document()
 ├── chat.py                      # Interactive terminal RAG chat (system prompt, history, PDF loader)
-├── app.py                       # 4-tab Streamlit web application with PDF uploader
-├── simple_rag.py                # Single-file ~220-line interview-ready script (LangChain)
+├── app.py                       # 4-tab Streamlit web application with drag-and-drop PDF uploader
 ├── INTERVIEW_CHEAT_SHEET.md     # 60-second pitch, interview Q&A, and resume guide
-├── .env.example                 # Free Groq API key configuration template
 ├── requirements.txt             # Clean, minimal dependencies
-└── README.md                    # Technical report & documentation
+└── README.md                    # Technical report & pipeline documentation
 ```
 
 ---
@@ -185,7 +183,7 @@ AlphaResearch-Financial-RAG/
 - **AI-Powered Financial Research Assistant (Advanced RAG)** | *Python, LangChain, Groq, SentenceTransformers, Vector Store, BM25, Streamlit*
   - Engineered an enterprise multi-document RAG assistant to query and compare SEC 10-K annual reports across Apple, Microsoft, Tesla, Alphabet, and Amazon.
   - Implemented section-aware financial document chunking and hybrid retrieval (Dense MiniLM + BM25Okapi) fused via Reciprocal Rank Fusion (RRF).
-  - Integrated Cross-Encoder reranking and a confidence refusal guardrail, achieving **100.0% Recall@3** and eliminating financial hallucinations on out-of-corpus queries.
+  - Integrated Cross-Encoder reranking and a confidence refusal guardrail, achieving high retrieval precision and eliminating financial hallucinations on out-of-corpus queries.
   - Built a multi-provider LLM client with LangChain ChatGroq and zero-dependency offline fallback, featuring an interactive terminal chat CLI with multi-turn history and a Streamlit dashboard with live PDF ingestion.
 
 ---

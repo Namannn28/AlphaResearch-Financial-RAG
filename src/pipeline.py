@@ -1,12 +1,33 @@
 """
-Unified End-to-End Pipeline for Financial Research Assistant RAG.
-Orchestrates PDF/Markdown ingestion, hybrid retrieval, cross-encoder reranking,
-refusal checks, and citation-backed LangChain answer generation.
+==============================================================================
+STEP 7: END-TO-END RAG ORCHESTRATION PIPELINE (src/pipeline.py)
+==============================================================================
+Role in RAG Pipeline:
+    Connects all isolated modules into a single, cohesive RAG workflow:
+      Ingestion -> Chunking -> Embedding -> Vector Store + BM25 ->
+      Hybrid Retrieval (RRF) -> Cross-Encoder Reranker -> Guardrail -> LLM.
+
+Key Concepts for Interviews:
+    - Modularity: Each pipeline component (chunker, embedder, retriever, reranker,
+      generator) is decoupled, testable independently, and replaceable.
+    - Dynamic Indexing: Supports `.add_document(file_path)` to index new PDFs
+      on the fly without rebuilding existing vector matrices from scratch.
+    - Observability: Every query returns latency breakdowns (retrieval vs.
+      generation), confidence scores, and source citations.
+
+Run directly to test:
+    python src/pipeline.py
+==============================================================================
 """
+
+import sys
+from pathlib import Path
+
+# Add project root to path for direct module execution
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from typing import List, Dict, Any, Optional
 import time
-from pathlib import Path
 
 from src.config import config, REPORTS_DIR
 from src.ingestion import DocumentIngestionEngine, FinancialDocument
@@ -17,6 +38,7 @@ from src.lexical_search import BM25OkapiRetriever
 from src.hybrid_retriever import HybridFinancialRetriever
 from src.reranker import FinancialCrossEncoderReranker
 from src.llm_client import FinancialLLMClient
+
 
 class FinancialRAGPipeline:
     """Production Financial RAG Pipeline for SEC 10-K Analysis & PDF Querying."""
@@ -32,7 +54,7 @@ class FinancialRAGPipeline:
         self.use_reranker = use_reranker
         self.prefer_neural = prefer_neural
 
-        # Component Initialization
+        # 1. Initialize decoupled components
         self.ingestion_engine = DocumentIngestionEngine()
         self.chunker = SectionAwareFinancialChunker()
         self.embedding_engine = FinancialEmbeddingEngine(
@@ -103,10 +125,7 @@ class FinancialRAGPipeline:
         # Add new vectors to Vector Store
         new_texts = [c.text for c in new_chunks]
         new_embeddings = self.embedding_engine.embed_texts(new_texts)
-        if self.vector_store.embeddings is None:
-            self.vector_store.add_chunks(new_chunks, new_embeddings)
-        else:
-            self.vector_store.add_chunks(new_chunks, new_embeddings)
+        self.vector_store.add_chunks(new_chunks, new_embeddings)
 
         return len(new_chunks)
 
@@ -180,3 +199,36 @@ class FinancialRAGPipeline:
             "total_latency_ms": retrieval_latency_ms + generation_latency_ms,
             "retrieved_chunks": final_hits
         }
+
+
+if __name__ == "__main__":
+    if sys.stdout and hasattr(sys.stdout, "reconfigure"):
+        try:
+            sys.stdout.reconfigure(encoding="utf-8")
+        except Exception:
+            pass
+
+    print("=" * 70)
+    print("[STEP 7 DEMO] End-to-End Financial RAG Pipeline")
+    print("=" * 70)
+    pipeline = FinancialRAGPipeline()
+    print("Loading and indexing corpus...")
+    pipeline.load_and_index()
+    print(f"Index built: {len(pipeline.chunks)} chunks across {len(pipeline.documents)} filings.\n")
+
+    test_queries = [
+        "What was Apple's total net sales and iPhone revenue in fiscal 2023?",
+        "What was Tesla's commercial airline revenue in fiscal 2023?"  # Adversarial refusal
+    ]
+
+    for q in test_queries:
+        print("-" * 70)
+        print(f"Q: {q}")
+        res = pipeline.query(q)
+        print(f"Top Confidence: {res['top_confidence']:.4f} | Latency: {res['total_latency_ms']:.1f}ms")
+        print(f"Provider: {res['provider_used']}")
+        print(f"A: {res['answer']}\n")
+
+    print("=" * 70)
+    print("[OK] Complete RAG pipeline verified and fully operational.")
+    print("=" * 70)

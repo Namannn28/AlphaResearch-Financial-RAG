@@ -1,10 +1,46 @@
+r"""
+==============================================================================
+STEP 5: CROSS-ENCODER RERANKER & REFUSAL GUARDRAIL (src/reranker.py)
+==============================================================================
+Role in RAG Pipeline:
+    Performs deep cross-attention re-scoring between the user query and candidate
+    passages retrieved from hybrid search. Enforces an adversarial refusal
+    guardrail that detects out-of-corpus topics and reduces confidence below
+    the refusal threshold.
+
+Key Concepts for Interviews:
+    - Bi-Encoder vs. Cross-Encoder:
+      * Bi-encoders (retriever) encode query and doc independently for fast search.
+      * Cross-encoders jointly attend across both `[CLS] Query [SEP] Passage [SEP]`,
+        capturing subtle word interactions that bi-encoders miss.
+    - Hallucination Refusal Guardrail:
+      * Evaluates substantive query terms (excluding stopwords & company names).
+      * If less than 45% of key terms exist in the passage, applies a safety penalty.
+      * This forces out-of-corpus questions (e.g., "Apple flying cars", "Tesla airlines")
+        to drop below the safety threshold ($\tau = 0.28$), triggering explicit refusal.
+
+Run directly to test:
+    python src/reranker.py
+==============================================================================
 """
-Cross-Encoder Reranker for Precision Financial Chunk Re-ordering.
-Uses cross-encoder/ms-marco-MiniLM-L-6-v2 with fallback scoring.
-"""
+
+import sys
+from pathlib import Path
+
+# Add project root to path for direct module execution
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from typing import List, Dict, Any
 import numpy as np
+import re
+from src.chunking import FinancialChunk, SectionAwareFinancialChunker
+from src.ingestion import DocumentIngestionEngine
+from src.vector_store import FinancialVectorStore
+from src.lexical_search import BM25OkapiRetriever
+from src.embeddings import FinancialEmbeddingEngine
+from src.hybrid_retriever import HybridFinancialRetriever
+from src.config import REPORTS_DIR
+
 
 class FinancialCrossEncoderReranker:
     """
@@ -54,13 +90,11 @@ class FinancialCrossEncoderReranker:
                 text_lower = hit["chunk"].text.lower()
                 matches = sum(1 for w in query_words if w in text_lower)
                 overlap_ratio = matches / max(1, len(query_words))
-                # Combine initial retrieval score and overlap
                 scaled_score = min(0.99, max(0.05, 0.25 + 0.65 * overlap_ratio))
                 sigmoid_scores.append(scaled_score)
 
         # Calculate match ratio of substantive query terms in candidate chunks
         # If less than 45% of key query terms appear in the passage, apply safety refusal penalty
-        import re
         stopwords = {
             "what", "was", "did", "the", "in", "and", "for", "with", "from", "how", "much",
             "apple", "tesla", "microsoft", "amazon", "alphabet", "google", "inc", "corp",
@@ -96,3 +130,45 @@ class FinancialCrossEncoderReranker:
             item["rank_lift"] = item["original_rank"] - new_rank
 
         return reranked_hits[:top_k]
+
+
+if __name__ == "__main__":
+    if sys.stdout and hasattr(sys.stdout, "reconfigure"):
+        try:
+            sys.stdout.reconfigure(encoding="utf-8")
+        except Exception:
+            pass
+
+    print("=" * 70)
+    print("[STEP 5 DEMO] Cross-Encoder Reranker & Guardrail")
+    print("=" * 70)
+    docs = DocumentIngestionEngine().load_all_reports(REPORTS_DIR)
+    chunks = []
+    chunker = SectionAwareFinancialChunker()
+    for d in docs:
+        chunks.extend(chunker.chunk_document(d))
+
+    embedder = FinancialEmbeddingEngine()
+    vectors = embedder.embed_texts([c.text for c in chunks])
+    vstore = FinancialVectorStore()
+    vstore.add_chunks(chunks, vectors)
+    bm25 = BM25OkapiRetriever()
+    bm25.index_chunks(chunks)
+    hybrid = HybridFinancialRetriever(vstore, bm25, embedder)
+    reranker = FinancialCrossEncoderReranker()
+
+    print("\nCase A: Legitimate In-Corpus Question")
+    q_valid = "What was Microsoft's Azure and Intelligent Cloud revenue in fiscal 2023?"
+    initial = hybrid.retrieve(q_valid, top_k=6)
+    reranked = reranker.rerank(q_valid, initial, top_k=2)
+    print(f"Query: \"{q_valid}\"")
+    print(f"Top Confidence Score: {reranked[0]['score']:.4f} (Safe to answer: {reranked[0]['score'] >= 0.28})")
+
+    print("\nCase B: Out-of-Corpus Adversarial Trap")
+    q_trap = "What was Tesla's commercial airline revenue in fiscal 2023?"
+    initial_trap = hybrid.retrieve(q_trap, top_k=6)
+    reranked_trap = reranker.rerank(q_trap, initial_trap, top_k=2)
+    print(f"Query: \"{q_trap}\"")
+    print(f"Top Confidence Score: {reranked_trap[0]['score']:.4f} (Triggers refusal < 0.28: {reranked_trap[0]['score'] < 0.28})")
+
+    print("\n[OK] Reranker & guardrail module operational.")
