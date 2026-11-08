@@ -103,14 +103,53 @@
 > 4. ***Compliance-Grade Page Citations & Traceability***: Financial analysts cannot submit recommendations based on opaque AI output. Our pipeline extracts and displays exact page numbers, section headers, and company metadata for every claim, making every figure verifiable in seconds.
 > 5. ***Scale, Latency & Cost***: Uploading 500 reports of 100+ pages into ChatGPT exceeds context limits, costs significant per-token fees, and takes minutes. Our pre-indexed hybrid search retrieves top relevant passages in **sub-15ms** on free, local CPU vector stores."*
 
+### Q8: How did you evaluate your RAG pipeline? What metrics did you measure?
+**Answer (The Empirical Engineering Proof)**:
+> *"I built an automated evaluation framework (`src/evaluation.py`) using a benchmark test suite of 50 curated financial inquiries and out-of-corpus adversarial hallucination traps across our 10-K corpus.
+>
+> I benchmarked four distinct retrieval architectures:*
+> 1. *Pure Dense Vector Search (MiniLM)*
+> 2. *Pure BM25 Lexical Search (Okapi BM25)*
+> 3. *Hybrid Search (Reciprocal Rank Fusion - RRF)*
+> 4. *Hybrid Search + Cross-Encoder Reranker & Guardrail (Full Pipeline)*
+>
+> *I measured two primary retrieval metrics:*
+> - ***Recall@K***: *Did the top-K retrieved candidates contain the gold factual disclosure?*
+> - ***MRR (Mean Reciprocal Rank)***: *At what rank did the gold passage appear ($1/\text{rank}$)?*
+> - ***Refusal Precision***: *Did the system correctly refuse adversarial out-of-corpus questions?*
+>
+> *The empirical results:*
+> - *Standard Dense vector search achieved **90.5% Recall@1** and **0.948 MRR**, but had **0.0% Refusal Safety** (it always returned ungrounded chunks on trick questions).*
+> - *BM25 achieved **92.9% Recall@1**, but missed paraphrased semantic queries (**97.6% Recall@5**).*
+> - *Our full **Hybrid + Cross-Encoder Reranker** achieved **95.2% Recall@1**, **100% Recall@5**, and an **MRR of 0.972**, while correctly rejecting **87.5%** of adversarial hallucination traps below our confidence threshold ($\tau = 0.28$)."*
+
 ---
 
-## 📝 4. Ready-to-Use Resume Bullets
+## 🔬 4. Empirical RAG Benchmark Results
+
+Run benchmark anytime: `python src/evaluation.py`
+
+| Architecture Mode | Recall@1 | Recall@3 | Recall@5 | MRR | Latency (ms) | Refusal Safety |
+| :--- | :---: | :---: | :---: | :---: | :---: | :---: |
+| **Dense Vector Search** | 90.5% | 100.0% | 100.0% | 0.948 | 13.2 ms | 0.0% |
+| **BM25 Lexical Search** | 92.9% | 97.6% | 97.6% | 0.948 | 0.1 ms | 0.0% |
+| **Hybrid (BM25 + Dense RRF)** | 90.5% | 100.0% | 100.0% | 0.948 | 12.6 ms | 0.0% |
+| **Hybrid + Cross-Encoder Reranker** | **95.2%** | **100.0%** | **100.0%** | **0.972** | 317.7 ms | **87.5%** |
+
+> [!NOTE]
+> **What this proves to an interviewer**:
+> - **Recall@1 jumped from 90.5% to 95.2%**: Cross-attention ensures the single best passage is placed at rank #1 in 95.2% of queries.
+> - **MRR reached 0.972**: Analysts get the exact answer immediately without having to browse down the candidate list.
+> - **Refusal Safety is 87.5% vs 0%**: Pure retrievers blindly hallucinate; your reranker guardrail actively blocks out-of-corpus queries.
+
+---
+
+## 📝 5. Ready-to-Use Resume Bullets
 
 Copy and paste these directly onto your resume:
 
-- **AI-Powered Financial Research Assistant (Advanced RAG)** | *Python, LangChain, Groq, SentenceTransformers, Vector Store, BM25, Streamlit*
+- **AI-Powered Financial Research Assistant (Evaluated Advanced RAG)** | *Python, LangChain, Groq, SentenceTransformers, Vector Store, BM25, Streamlit*
   - Engineered an enterprise multi-document RAG assistant to query and compare SEC 10-K annual reports across Apple, Microsoft, Tesla, Alphabet, and Amazon.
   - Implemented section-aware financial document chunking and hybrid retrieval (Dense MiniLM + BM25Okapi) fused via Reciprocal Rank Fusion (RRF).
-  - Integrated Cross-Encoder reranking and a confidence refusal guardrail, achieving high retrieval precision and eliminating financial hallucinations on out-of-corpus queries.
+  - Integrated Cross-Encoder reranking and an adversarial confidence refusal guardrail ($\tau = 0.28$), achieving **95.2% Recall@1**, **100% Recall@5**, **0.972 MRR**, and **87.5% refusal safety** across a 50-query benchmark.
   - Built a multi-provider LLM client with LangChain ChatGroq and zero-dependency offline fallback, featuring an interactive terminal chat CLI with multi-turn history and a Streamlit dashboard with live PDF ingestion.

@@ -1,0 +1,452 @@
+[
+  {
+    "id": "q_01",
+    "question": "What was Apple's total net sales in fiscal 2023?",
+    "company": "Apple Inc.",
+    "ticker": "AAPL",
+    "gold_keywords": ["383,285", "net sales", "383.29"],
+    "expected_answer": "$383,285 million ($383.29 billion)",
+    "is_adversarial": false
+  },
+  {
+    "id": "q_02",
+    "question": "What was Apple's gross margin percentage in fiscal 2023 and how did it change from 2022?",
+    "company": "Apple Inc.",
+    "ticker": "AAPL",
+    "gold_keywords": ["44.1%", "gross margin", "43.3%"],
+    "expected_answer": "44.1%, up from 43.3% in fiscal 2022",
+    "is_adversarial": false
+  },
+  {
+    "id": "q_03",
+    "question": "How much revenue did iPhone generate in fiscal 2023 and what share of Apple's total sales did it represent?",
+    "company": "Apple Inc.",
+    "ticker": "AAPL",
+    "gold_keywords": ["200,583", "52.3%", "iPhone"],
+    "expected_answer": "$200,583 million ($200.58 billion), representing 52.3% of total revenue",
+    "is_adversarial": false
+  },
+  {
+    "id": "q_04",
+    "question": "What was Apple's Services segment revenue in fiscal 2023?",
+    "company": "Apple Inc.",
+    "ticker": "AAPL",
+    "gold_keywords": ["85,200", "Services", "9.1%"],
+    "expected_answer": "$85,200 million ($85.20 billion), up 9.1% year-over-year",
+    "is_adversarial": false
+  },
+  {
+    "id": "q_05",
+    "question": "What was Apple's diluted earnings per share (EPS) in fiscal 2023?",
+    "company": "Apple Inc.",
+    "ticker": "AAPL",
+    "gold_keywords": ["6.13", "diluted earnings per share", "EPS"],
+    "expected_answer": "$6.13",
+    "is_adversarial": false
+  },
+  {
+    "id": "q_06",
+    "question": "How much did Apple spend on Research and Development (R&D) in FY 2023?",
+    "company": "Apple Inc.",
+    "ticker": "AAPL",
+    "gold_keywords": ["29,915", "Research and Development", "7.8%"],
+    "expected_answer": "$29,915 million ($29.92 billion), representing 7.8% of net sales",
+    "is_adversarial": false
+  },
+  {
+    "id": "q_07",
+    "question": "What are Apple's major supply chain concentration risks cited in Item 1A?",
+    "company": "Apple Inc.",
+    "ticker": "AAPL",
+    "gold_keywords": ["China and Taiwan", "Supply Chain Concentration", "outsourced partners"],
+    "expected_answer": "Substantially all manufacturing is performed by outsourced partners in Asia, primarily China and Taiwan",
+    "is_adversarial": false
+  },
+  {
+    "id": "q_08",
+    "question": "What regulatory pressures does Apple face regarding its App Store 30% commission?",
+    "company": "Apple Inc.",
+    "ticker": "AAPL",
+    "gold_keywords": ["Digital Markets Act", "30%", "antitrust"],
+    "expected_answer": "European Union Digital Markets Act and US DOJ investigations challenging the 30% commission and third-party payment rules",
+    "is_adversarial": false
+  },
+  {
+    "id": "q_09",
+    "question": "What was Microsoft's total revenue in fiscal 2023?",
+    "company": "Microsoft Corporation",
+    "ticker": "MSFT",
+    "gold_keywords": ["211,915", "Total Revenue", "211.92"],
+    "expected_answer": "$211,915 million ($211.92 billion), an increase of 6.9%",
+    "is_adversarial": false
+  },
+  {
+    "id": "q_10",
+    "question": "How much revenue did Microsoft Intelligent Cloud produce in FY 2023 and what was its growth rate?",
+    "company": "Microsoft Corporation",
+    "ticker": "MSFT",
+    "gold_keywords": ["87,907", "Intelligent Cloud", "17%"],
+    "expected_answer": "$87,907 million ($87.91 billion), up 17% year-over-year",
+    "is_adversarial": false
+  },
+  {
+    "id": "q_11",
+    "question": "What was Azure and cloud services revenue growth rate in fiscal 2023?",
+    "company": "Microsoft Corporation",
+    "ticker": "MSFT",
+    "gold_keywords": ["27%", "Azure", "cloud services revenue"],
+    "expected_answer": "Azure and other cloud services revenue grew 27%",
+    "is_adversarial": false
+  },
+  {
+    "id": "q_12",
+    "question": "What was Microsoft's gross margin percentage in FY 2023?",
+    "company": "Microsoft Corporation",
+    "ticker": "MSFT",
+    "gold_keywords": ["68.9%", "gross margin percentage", "146,052"],
+    "expected_answer": "68.9%, compared to 68.4% in fiscal 2022",
+    "is_adversarial": false
+  },
+  {
+    "id": "q_13",
+    "question": "What was Microsoft's net income and diluted EPS in fiscal 2023?",
+    "company": "Microsoft Corporation",
+    "ticker": "MSFT",
+    "gold_keywords": ["72,361", "9.68", "Net Income"],
+    "expected_answer": "Net income of $72,361 million ($72.36 billion) and diluted EPS of $9.68",
+    "is_adversarial": false
+  },
+  {
+    "id": "q_14",
+    "question": "What hardware and supercomputing infrastructure did Microsoft invest in for AI during FY 2023?",
+    "company": "Microsoft Corporation",
+    "ticker": "MSFT",
+    "gold_keywords": ["NVIDIA H100", "Azure OpenAI", "27,195"],
+    "expected_answer": "Azure OpenAI infrastructure, Copilot integration, and supercomputing clusters featuring NVIDIA H100 GPUs",
+    "is_adversarial": false
+  },
+  {
+    "id": "q_15",
+    "question": "Why did Microsoft's More Personal Computing segment revenue decline in FY 2023?",
+    "company": "Microsoft Corporation",
+    "ticker": "MSFT",
+    "gold_keywords": ["54,734", "8.8%", "PC market"],
+    "expected_answer": "Down 8.8% to $54,734 million due to post-pandemic weakness in the global PC market and OEM licensing declines",
+    "is_adversarial": false
+  },
+  {
+    "id": "q_16",
+    "question": "What was the purchase price of Activision Blizzard acquisition by Microsoft mentioned in risk factors?",
+    "company": "Microsoft Corporation",
+    "ticker": "MSFT",
+    "gold_keywords": ["Activision Blizzard", "68.7 billion", "Antitrust"],
+    "expected_answer": "$68.7 billion",
+    "is_adversarial": false
+  },
+  {
+    "id": "q_17",
+    "question": "What were Tesla's total revenues in fiscal 2023 and year-over-year growth?",
+    "company": "Tesla, Inc.",
+    "ticker": "TSLA",
+    "gold_keywords": ["96,773", "18.8%", "Total Revenues"],
+    "expected_answer": "$96,773 million ($96.77 billion), up 18.8% year-over-year",
+    "is_adversarial": false
+  },
+  {
+    "id": "q_18",
+    "question": "What was Tesla's gross margin percentage in 2023 and why did it decline from 2022?",
+    "company": "Tesla, Inc.",
+    "ticker": "TSLA",
+    "gold_keywords": ["18.2%", "25.6%", "price reductions"],
+    "expected_answer": "18.2%, down sharply from 25.6% in 2022 due to aggressive global vehicle price reductions",
+    "is_adversarial": false
+  },
+  {
+    "id": "q_19",
+    "question": "How many electric vehicles did Tesla deliver in 2023?",
+    "company": "Tesla, Inc.",
+    "ticker": "TSLA",
+    "gold_keywords": ["1,808,581", "deliveries", "38%"],
+    "expected_answer": "1,808,581 units, up 38% year-over-year",
+    "is_adversarial": false
+  },
+  {
+    "id": "q_20",
+    "question": "How much revenue did Tesla's Energy Generation and Storage segment generate in 2023?",
+    "company": "Tesla, Inc.",
+    "ticker": "TSLA",
+    "gold_keywords": ["6,035", "54%", "Megapack"],
+    "expected_answer": "$6,035 million ($6.04 billion), surging 54% year-over-year with 14.7 GWh Megapack deployments",
+    "is_adversarial": false
+  },
+  {
+    "id": "q_21",
+    "question": "Why did Tesla's operating income drop 35% in 2023?",
+    "company": "Tesla, Inc.",
+    "ticker": "TSLA",
+    "gold_keywords": ["8,891", "35%", "13,656"],
+    "expected_answer": "Operating income dropped 35% to $8,891 million due to vehicle price cuts and margin compression",
+    "is_adversarial": false
+  },
+  {
+    "id": "q_22",
+    "question": "What custom AI hardware and autonomous driving models is Tesla developing?",
+    "company": "Tesla, Inc.",
+    "ticker": "TSLA",
+    "gold_keywords": ["Dojo", "FSD V12", "Optimus"],
+    "expected_answer": "Custom Dojo AI supercomputing chips and end-to-end neural network models (FSD V12) alongside Optimus robot",
+    "is_adversarial": false
+  },
+  {
+    "id": "q_23",
+    "question": "What government agencies are investigating Tesla's Autopilot and Full Self-Driving?",
+    "company": "Tesla, Inc.",
+    "ticker": "TSLA",
+    "gold_keywords": ["NHTSA", "California DMV", "investigations"],
+    "expected_answer": "NHTSA and the California DMV regarding marketing disclosures and driver monitoring",
+    "is_adversarial": false
+  },
+  {
+    "id": "q_24",
+    "question": "What was Amazon's total net sales in fiscal 2023?",
+    "company": "Amazon.com, Inc.",
+    "ticker": "AMZN",
+    "gold_keywords": ["574,785", "Total Net Sales", "11.8%"],
+    "expected_answer": "$574,785 million ($574.78 billion), an increase of 11.8% year-over-year",
+    "is_adversarial": false
+  },
+  {
+    "id": "q_25",
+    "question": "How much revenue and operating income did AWS generate in 2023?",
+    "company": "Amazon.com, Inc.",
+    "ticker": "AMZN",
+    "gold_keywords": ["90,757", "24,631", "AWS"],
+    "expected_answer": "Revenue of $90,757 million ($90.76 billion) and operating income of $24,631 million ($24.63 billion)",
+    "is_adversarial": false
+  },
+  {
+    "id": "q_26",
+    "question": "What percentage of Amazon's consolidated operating profit came from AWS in 2023?",
+    "company": "Amazon.com, Inc.",
+    "ticker": "AMZN",
+    "gold_keywords": ["66.8%", "AWS", "operating profit"],
+    "expected_answer": "66.8% of Amazon's total consolidated operating profit",
+    "is_adversarial": false
+  },
+  {
+    "id": "q_27",
+    "question": "What was Amazon's Advertising Services revenue in FY 2023?",
+    "company": "Amazon.com, Inc.",
+    "ticker": "AMZN",
+    "gold_keywords": ["46,906", "Advertising Services", "24.3%"],
+    "expected_answer": "$46,906 million ($46.91 billion), up 24.3% year-over-year",
+    "is_adversarial": false
+  },
+  {
+    "id": "q_28",
+    "question": "What was Amazon's net income in 2023 compared to its 2022 net loss?",
+    "company": "Amazon.com, Inc.",
+    "ticker": "AMZN",
+    "gold_keywords": ["30,425", "2,722", "Rivian"],
+    "expected_answer": "Net income of $30,425 million, rebounding from a net loss of $2,722 million in 2022",
+    "is_adversarial": false
+  },
+  {
+    "id": "q_29",
+    "question": "What custom AI chips is Amazon developing for AWS infrastructure?",
+    "company": "Amazon.com, Inc.",
+    "ticker": "AMZN",
+    "gold_keywords": ["Trainium", "Inferentia", "Bedrock"],
+    "expected_answer": "AWS Trainium and Inferentia chips alongside Amazon Bedrock service",
+    "is_adversarial": false
+  },
+  {
+    "id": "q_30",
+    "question": "What was Alphabet's total revenue in fiscal 2023?",
+    "company": "Alphabet Inc.",
+    "ticker": "GOOGL",
+    "gold_keywords": ["307,394", "Total Revenues", "8.7%"],
+    "expected_answer": "$307,394 million ($307.39 billion), up 8.7% year-over-year",
+    "is_adversarial": false
+  },
+  {
+    "id": "q_31",
+    "question": "How much revenue did Google Search generate in 2023?",
+    "company": "Alphabet Inc.",
+    "ticker": "GOOGL",
+    "gold_keywords": ["175,033", "Google Search", "7.7%"],
+    "expected_answer": "$175,033 million ($175.03 billion), growing 7.7%",
+    "is_adversarial": false
+  },
+  {
+    "id": "q_32",
+    "question": "What was YouTube advertising revenue in fiscal 2023?",
+    "company": "Alphabet Inc.",
+    "ticker": "GOOGL",
+    "gold_keywords": ["31,510", "YouTube Advertising", "7.8%"],
+    "expected_answer": "$31,510 million ($31.51 billion), up 7.8%",
+    "is_adversarial": false
+  },
+  {
+    "id": "q_33",
+    "question": "What milestone did Google Cloud achieve in fiscal 2023 regarding operating profitability?",
+    "company": "Alphabet Inc.",
+    "ticker": "GOOGL",
+    "gold_keywords": ["33,088", "864 million", "first full year of operating profitability"],
+    "expected_answer": "First full year of operating profitability ($864 million operating income) on $33,088 million revenue",
+    "is_adversarial": false
+  },
+  {
+    "id": "q_34",
+    "question": "How much did Alphabet spend on R&D in FY 2023 and what were the primary priorities?",
+    "company": "Alphabet Inc.",
+    "ticker": "GOOGL",
+    "gold_keywords": ["45,427", "Gemini", "TPU v5e"],
+    "expected_answer": "$45,427 million (14.8% of revenue), prioritizing Gemini foundational models and custom TPU accelerators",
+    "is_adversarial": false
+  },
+  {
+    "id": "q_35",
+    "question": "What conversational AI search disruption risk does Alphabet describe in Item 1A?",
+    "company": "Alphabet Inc.",
+    "ticker": "GOOGL",
+    "gold_keywords": ["Search Disruption", "conversational AI chatbots", "query volume"],
+    "expected_answer": "Consumer search habit shifts to conversational AI chatbots could dilute traditional search query volume and ad monetization",
+    "is_adversarial": false
+  },
+  {
+    "id": "q_36",
+    "question": "Compare the 2023 gross margin percentages between Microsoft and Apple.",
+    "company": "Cross-Company",
+    "ticker": "MSFT/AAPL",
+    "gold_keywords": ["68.9%", "44.1%", "gross margin"],
+    "expected_answer": "Microsoft gross margin was 68.9% while Apple gross margin was 44.1%",
+    "is_adversarial": false
+  },
+  {
+    "id": "q_37",
+    "question": "Compare cloud infrastructure revenue growth rates across Azure, Google Cloud, and AWS in 2023.",
+    "company": "Cross-Company",
+    "ticker": "MSFT/GOOGL/AMZN",
+    "gold_keywords": ["27%", "25.9%", "13.3%"],
+    "expected_answer": "Azure grew 27%, Google Cloud grew 25.9%, and AWS grew 13.3%",
+    "is_adversarial": false
+  },
+  {
+    "id": "q_38",
+    "question": "Compare R&D spending between Alphabet and Apple in fiscal 2023.",
+    "company": "Cross-Company",
+    "ticker": "GOOGL/AAPL",
+    "gold_keywords": ["45,427", "29,915", "R&D"],
+    "expected_answer": "Alphabet spent $45,427 million (14.8% of revenue) vs Apple spending $29,915 million (7.8% of revenue)",
+    "is_adversarial": false
+  },
+  {
+    "id": "q_39",
+    "question": "What was Amazon's total gross profit and gross margin in 2023?",
+    "company": "Amazon.com, Inc.",
+    "ticker": "AMZN",
+    "gold_keywords": ["270,258", "47.0%", "gross profit"],
+    "expected_answer": "$270,258 million gross profit with a 47.0% gross margin",
+    "is_adversarial": false
+  },
+  {
+    "id": "q_40",
+    "question": "What was Apple's total operating income in fiscal 2023 compared to fiscal 2022?",
+    "company": "Apple Inc.",
+    "ticker": "AAPL",
+    "gold_keywords": ["114,301", "119,437", "Operating Income"],
+    "expected_answer": "$114,301 million in FY23 compared to $119,437 million in FY22",
+    "is_adversarial": false
+  },
+  {
+    "id": "q_41",
+    "question": "How much did Microsoft spend on Capital Expenditures (Capex) in fiscal 2023?",
+    "company": "Microsoft Corporation",
+    "ticker": "MSFT",
+    "gold_keywords": ["31,900", "Capital Expenditures", "Capex"],
+    "expected_answer": "$31,900 million ($31.90 billion) to expand cloud data centers and AI hardware",
+    "is_adversarial": false
+  },
+  {
+    "id": "q_42",
+    "question": "What was Tesla's automotive gross margin excluding regulatory credits in 2023?",
+    "company": "Tesla, Inc.",
+    "ticker": "TSLA",
+    "gold_keywords": ["17.1%", "Automotive gross margin", "regulatory credits"],
+    "expected_answer": "17.1%",
+    "is_adversarial": false
+  },
+  {
+    "id": "q_43",
+    "question": "What was Tesla's total commercial passenger airline ticket revenue in 2023?",
+    "company": "Tesla, Inc.",
+    "ticker": "TSLA",
+    "gold_keywords": ["airline", "ticket", "passenger flight"],
+    "expected_answer": "[REFUSAL - INSUFFICIENT_EVIDENCE]",
+    "is_adversarial": true
+  },
+  {
+    "id": "q_44",
+    "question": "How many commercial supersonic aircraft did Apple deliver in fiscal 2023?",
+    "company": "Apple Inc.",
+    "ticker": "AAPL",
+    "gold_keywords": ["supersonic", "aircraft", "jet flight"],
+    "expected_answer": "[REFUSAL - INSUFFICIENT_EVIDENCE]",
+    "is_adversarial": true
+  },
+  {
+    "id": "q_45",
+    "question": "What was Microsoft's submarine and deep-sea naval exploration division net profit?",
+    "company": "Microsoft Corporation",
+    "ticker": "MSFT",
+    "gold_keywords": ["submarine", "naval", "deep-sea"],
+    "expected_answer": "[REFUSAL - INSUFFICIENT_EVIDENCE]",
+    "is_adversarial": true
+  },
+  {
+    "id": "q_46",
+    "question": "How much revenue did Amazon generate from commercial lunar orbit payload transport in 2023?",
+    "company": "Amazon.com, Inc.",
+    "ticker": "AMZN",
+    "gold_keywords": ["lunar orbit", "payload transport", "moon rocket"],
+    "expected_answer": "[REFUSAL - INSUFFICIENT_EVIDENCE]",
+    "is_adversarial": true
+  },
+  {
+    "id": "q_47",
+    "question": "What was Alphabet's profit from offshore deepwater oil and petroleum drilling operations?",
+    "company": "Alphabet Inc.",
+    "ticker": "GOOGL",
+    "gold_keywords": ["petroleum", "oil drilling", "offshore crude"],
+    "expected_answer": "[REFUSAL - INSUFFICIENT_EVIDENCE]",
+    "is_adversarial": true
+  },
+  {
+    "id": "q_48",
+    "question": "What was Apple's total sales revenue from electric flying hovercraft in 2023?",
+    "company": "Apple Inc.",
+    "ticker": "AAPL",
+    "gold_keywords": ["flying hovercraft", "flying car"],
+    "expected_answer": "[REFUSAL - INSUFFICIENT_EVIDENCE]",
+    "is_adversarial": true
+  },
+  {
+    "id": "q_49",
+    "question": "How many nuclear fission power plants did Tesla operate in 2023?",
+    "company": "Tesla, Inc.",
+    "ticker": "TSLA",
+    "gold_keywords": ["nuclear fission", "power reactor", "nuclear plant"],
+    "expected_answer": "[REFUSAL - INSUFFICIENT_EVIDENCE]",
+    "is_adversarial": true
+  },
+  {
+    "id": "q_50",
+    "question": "How many smartphones and cellular phones did Tesla manufacture and sell in 2023?",
+    "company": "Tesla, Inc.",
+    "ticker": "TSLA",
+    "gold_keywords": ["smartphone sales", "cellular phone model"],
+    "expected_answer": "[REFUSAL - INSUFFICIENT_EVIDENCE]",
+    "is_adversarial": true
+  }
+]
