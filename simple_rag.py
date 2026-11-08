@@ -156,10 +156,10 @@ class SimpleEmbedder:
         return (tfidf / norms).astype(np.float32)
 
 # ----------------------------------------------------------------------------
-# 5. Hybrid Search & Guardrail Answer Synthesis
+# 5. Hybrid Search & Guardrail Answer Synthesis (LangChain MistralAI)
 # ----------------------------------------------------------------------------
 class FinancialRAG:
-    """Coordinates retrieval, confidence evaluation, and answer generation."""
+    """Coordinates retrieval, confidence evaluation, and answer generation using LangChain."""
 
     def __init__(self, reports_dir: Path, mistral_api_key: Optional[str] = None):
         import numpy as np
@@ -169,6 +169,19 @@ class FinancialRAG:
         self.embedder = SimpleEmbedder()
         self.chunk_vectors = self.embedder.embed([c.text for c in self.chunks])
         self.mistral_key = mistral_api_key or os.getenv("MISTRAL_API_KEY", "")
+
+        # Initialize LangChain ChatMistralAI model
+        self.chat_model = None
+        if self.mistral_key:
+            try:
+                from langchain_mistralai import ChatMistralAI
+                self.chat_model = ChatMistralAI(
+                    model="mistral-small-latest",
+                    mistral_api_key=self.mistral_key,
+                    temperature=0.1
+                )
+            except Exception:
+                self.chat_model = None
 
     def answer_query(self, query: str, confidence_threshold: float = 0.28) -> str:
         """Runs hybrid search, evaluates confidence, and produces an answer with citations."""
@@ -198,19 +211,21 @@ class FinancialRAG:
         top_idx = next(i for i, c in enumerate(self.chunks) if c.chunk_id == best_cid)
         confidence = float(dense_scores[top_idx])
 
-        # Check substantive topic overlap to prevent false matches on company name alone
+        # Calculate match ratio of substantive query terms in retrieved chunk
+        # If less than 45% of key query terms appear in the chunk, heavily penalize to prevent hallucination
         stopwords = {
-            "what", "was", "did", "the", "in", "and", "for", "with", "from", "total",
-            "fiscal", "year", "2023", "revenue", "how", "much", "apple", "tesla",
-            "microsoft", "amazon", "alphabet", "google", "inc", "corp", "profit",
-            "sales", "margin", "income", "spend", "cost", "report", "company"
+            "what", "was", "did", "the", "in", "and", "for", "with", "from", "how", "much",
+            "apple", "tesla", "microsoft", "amazon", "alphabet", "google", "inc", "corp",
+            "total", "fiscal", "year", "2023", "2022", "annual", "report", "company"
         }
         raw_words = re.findall(r"[a-zA-Z0-9]+", query.lower())
-        substantive_query_words = [w for w in raw_words if len(w) > 3 and w not in stopwords]
-        if substantive_query_words:
-            matched_words = [w for w in substantive_query_words if w in best_chunk.text.lower()]
-            if not matched_words:
-                confidence *= 0.20  # Heavily penalize if core non-company topic has zero occurrences
+        substantive_terms = [w for w in raw_words if len(w) > 2 and w not in stopwords]
+
+        if substantive_terms:
+            matched_terms = [w for w in substantive_terms if w in best_chunk.text.lower()]
+            match_ratio = len(matched_terms) / len(substantive_terms)
+            if match_ratio < 0.45:
+                confidence *= 0.20  # Guardrail penalty for out-of-corpus queries
 
         latency_ms = (time.perf_counter() - start) * 1000.0
 
@@ -222,11 +237,24 @@ class FinancialRAG:
                 f"Refusing to speculate to prevent financial hallucination."
             )
 
-        # Step 5: Answer with Mistral API (or clean offline extractive fallback)
-        if self.mistral_key:
+        # Step 5: Answer with LangChain ChatMistralAI (or clean offline extractive fallback)
+        if self.chat_model is not None:
+            try:
+                from langchain_core.messages import SystemMessage, HumanMessage
+                messages = [
+                    SystemMessage(content="You are a professional financial analyst. Answer the user question using ONLY the provided verified 10-K context, with citations."),
+                    HumanMessage(content=f"Context:\n{best_chunk.text}\n\nQuestion: {query}")
+                ]
+                response = self.chat_model.invoke(messages)
+                answer = response.content.strip()
+                return f"{answer}\n\n*(Citations: [{best_chunk.company} ({best_chunk.ticker}) | {best_chunk.section_title}] | Provider: LangChain ChatMistralAI | Latency: {latency_ms:.1f}ms)*"
+            except Exception:
+                pass  # Fallback to offline extraction
+
+        elif self.mistral_key:
             try:
                 answer = self._call_mistral(query, best_chunk.text)
-                return f"{answer}\n\n*(Citations: [{best_chunk.company} ({best_chunk.ticker}) | {best_chunk.section_title}] | Latency: {latency_ms:.1f}ms)*"
+                return f"{answer}\n\n*(Citations: [{best_chunk.company} ({best_chunk.ticker}) | {best_chunk.section_title}] | Provider: Mistral API | Latency: {latency_ms:.1f}ms)*"
             except Exception:
                 pass  # Fallback to offline extraction
 

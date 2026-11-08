@@ -58,26 +58,27 @@ class FinancialCrossEncoderReranker:
                 scaled_score = min(0.99, max(0.05, 0.25 + 0.65 * overlap_ratio))
                 sigmoid_scores.append(scaled_score)
 
-        # Check substantive non-company topic words
+        # Calculate match ratio of substantive query terms in candidate chunks
+        # If less than 45% of key query terms appear in the passage, apply safety refusal penalty
         import re
         stopwords = {
-            "what", "was", "did", "the", "in", "and", "for", "with", "from", "total",
-            "fiscal", "year", "2023", "revenue", "how", "much", "apple", "tesla",
-            "microsoft", "amazon", "alphabet", "google", "inc", "corp", "profit",
-            "sales", "margin", "income", "spend", "cost", "report", "company"
+            "what", "was", "did", "the", "in", "and", "for", "with", "from", "how", "much",
+            "apple", "tesla", "microsoft", "amazon", "alphabet", "google", "inc", "corp",
+            "total", "fiscal", "year", "2023", "2022", "annual", "report", "company"
         }
         raw_words = re.findall(r"[a-zA-Z0-9]+", query.lower())
-        substantive_query_words = [w for w in raw_words if len(w) > 3 and w not in stopwords]
+        substantive_terms = [w for w in raw_words if len(w) > 2 and w not in stopwords]
 
         # Attach rerank score and trace rank lift
         reranked_hits: List[Dict[str, Any]] = []
         for original_idx, (hit, score) in enumerate(zip(candidate_hits, sigmoid_scores)):
             final_score = float(score)
-            if substantive_query_words:
+            if substantive_terms:
                 text_lower = hit["chunk"].text.lower()
-                matched = [w for w in substantive_query_words if w in text_lower]
-                if not matched:
-                    final_score *= 0.20  # Guardrail penalty for out-of-corpus topic
+                matched_terms = [w for w in substantive_terms if w in text_lower]
+                match_ratio = len(matched_terms) / len(substantive_terms)
+                if match_ratio < 0.45:
+                    final_score *= 0.20  # Guardrail penalty for out-of-corpus queries
 
             reranked_hits.append({
                 "chunk": hit["chunk"],

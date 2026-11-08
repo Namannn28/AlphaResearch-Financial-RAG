@@ -85,16 +85,21 @@ with st.sidebar:
     st.subheader("🔑 LLM Provider Settings")
     provider_choice = st.selectbox(
         "Generation Backend",
-        options=["Offline Grounded Engine", "Mistral AI (Free API)", "Groq Cloud (Free API)"],
+        options=["Offline Grounded Engine", "LangChain ChatMistralAI (Mistral API)", "Groq Cloud (Free API)"],
         index=0,
-        help="Works completely offline without keys, or integrate a free Mistral/Groq key for conversational synthesis."
+        help="Works completely offline without keys, or integrate LangChain ChatMistralAI with a free Mistral API key."
     )
 
+    import os
     api_key_input = ""
     if "Mistral" in provider_choice:
-        api_key_input = st.text_input("Mistral API Key", type="password", placeholder="Paste free key from console.mistral.ai")
+        default_mistral = os.getenv("MISTRAL_API_KEY", "")
+        api_key_input = st.text_input("Mistral API Key", type="password", value=default_mistral, placeholder="Paste free key from console.mistral.ai")
+        st.caption("🔑 Free API key available at [console.mistral.ai](https://console.mistral.ai/)")
     elif "Groq" in provider_choice:
-        api_key_input = st.text_input("Groq API Key", type="password", placeholder="Paste free key from console.groq.com")
+        default_groq = os.getenv("GROQ_API_KEY", "")
+        api_key_input = st.text_input("Groq API Key", type="password", value=default_groq, placeholder="Paste free key from console.groq.com")
+        st.caption("🔑 Free API key available at [console.groq.com](https://console.groq.com/)")
 
     st.markdown("---")
     st.subheader("⚙️ Retrieval Architecture")
