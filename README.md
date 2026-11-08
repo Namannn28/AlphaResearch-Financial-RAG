@@ -136,10 +136,6 @@ python simple_rag.py
 
 ### 3. Launch the Interactive Streamlit Web UI
 ```bash
-# One-click Windows startup
-run_app.bat
-
-# Or direct command:
 streamlit run app.py
 ```
 
@@ -180,11 +176,10 @@ AlphaResearch-Financial-RAG/
 ├── tests/
 │   └── test_pipeline.py         # Pytest test suite (6/6 passing)
 ├── app.py                       # 4-tab Streamlit web application
-├── simple_rag.py                # Single-file ~220-line interview-ready script
+├── simple_rag.py                # Single-file ~220-line interview-ready script (LangChain)
 ├── INTERVIEW_CHEAT_SHEET.md     # 60-second pitch, interview Q&A, and resume guide
-├── run_app.bat                  # One-click Windows virtual environment launcher
-├── run_app.ps1                  # PowerShell virtual environment launcher
-├── requirements.txt             # Minimal, reproducible dependencies
+├── .env.example                 # Free Mistral API key configuration
+├── requirements.txt             # Clean, minimal dependencies
 └── README.md                    # Technical report & model card
 ```
 
