@@ -1,7 +1,7 @@
 # AlphaResearch: Enterprise Financial Document Intelligence (Advanced RAG)
 
+[![Live App](https://static.streamlit.io/badges/streamlit_badge_black_white.svg)](https://namannn28-alpharesearch-financial-rag-app-ux5ypx.streamlit.app/)
 [![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/downloads/)
-[![Streamlit App](https://static.streamlit.io/badges/streamlit_badge_black_white.svg)](https://streamlit.io/)
 [![License: Apache 2.0](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](LICENSE)
 [![Retrieval: Hybrid BM25 + Dense](https://img.shields.io/badge/Retrieval-Hybrid%20BM25%20%2B%20Dense-brightgreen.svg)]()
 [![Refusal Safety: 87.5%](https://img.shields.io/badge/Refusal_Safety-87.5%25-success.svg)]()
@@ -11,15 +11,17 @@
 
 ---
 
-## 🌐 Live Streamlit Deployment
+## 🌐 Live Interactive Demo
 
-The application is configured for deployment on **Streamlit Community Cloud**:
+🚀 **Experience the live deployment directly in your browser:**  
+👉 **[https://namannn28-alpharesearch-financial-rag-app-ux5ypx.streamlit.app/](https://namannn28-alpharesearch-financial-rag-app-ux5ypx.streamlit.app/)**
 
-| Service | Link / Status |
+| Service | Details |
 | :--- | :--- |
-| **Streamlit App** | `app.py` (Main entry point) |
-| **Hosting Platform** | [Streamlit Community Cloud](https://share.streamlit.io/) |
-| **Deployment Guide** | See [Deployment Instructions](#-deployment-to-streamlit-community-cloud) below |
+| **Live App URL** | [namannn28-alpharesearch-financial-rag-app-ux5ypx.streamlit.app](https://namannn28-alpharesearch-financial-rag-app-ux5ypx.streamlit.app/) |
+| **Hosting Platform** | Streamlit Community Cloud |
+| **Inference Engine** | Hybrid Dense + BM25 Retrieval & RRF with Groq LLM Cloud Acceleration |
+| **Corpus** | Audited SEC 10-Ks (AAPL, MSFT, TSLA, GOOGL, AMZN) + In-Memory Custom PDF Ingestion |
 
 ---
 
