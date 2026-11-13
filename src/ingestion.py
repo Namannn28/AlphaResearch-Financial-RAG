@@ -7,7 +7,7 @@ Role in RAG Pipeline:
     (.pdf, .md, .txt). Normalizes headings, page numbers, and company metadata
     into standardized FinancialDocument objects.
 
-Key Concepts for Interviews:
+Key Architectural & Design Principles:
     - Multi-format ingestion: Extracts text, tables, and page markers from PDFs
       using pypdf, and splits Markdown files along heading hierarchies (Item 1,
       Item 7 MD&A, Item 1A Risk Factors).

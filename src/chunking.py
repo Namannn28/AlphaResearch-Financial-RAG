@@ -7,7 +7,7 @@ Role in RAG Pipeline:
     preserving section titles, page markers, and financial tables. Prepend
     metadata headers to each chunk so embeddings retain company context.
 
-Key Concepts for Interviews:
+Key Architectural & Design Principles:
     - Fixed-window chunking flaws: Blindly splitting every 500 tokens often
       slices financial tables in half, severing rows from column headers.
     - Section-Aware chunking: Splits on logical heading boundaries (Item 1,

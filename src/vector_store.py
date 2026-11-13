@@ -6,7 +6,7 @@ Role in RAG Pipeline:
     Maintains an in-memory index of embedded document chunks, metadata, and
     performs fast cosine nearest-neighbor search with optional metadata filtering.
 
-Key Concepts for Interviews:
+Key Architectural & Design Principles:
     - Zero external infrastructure: Runs locally without requiring Docker,
       Chroma server, or Pinecone credentials.
     - Vectorized Cosine Search: Uses NumPy matrix multiplication:

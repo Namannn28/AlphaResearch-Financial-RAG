@@ -8,7 +8,7 @@ Role in RAG Pipeline:
     guardrail that detects out-of-corpus topics while welcoming broad
     conversational inquiries about in-corpus companies.
 
-Key Concepts for Interviews:
+Key Architectural & Design Principles:
     - Bi-Encoder vs. Cross-Encoder:
       * Bi-encoders (retriever) encode query and doc independently for fast search.
       * Cross-encoders jointly attend across both `[CLS] Query [SEP] Passage [SEP]`,

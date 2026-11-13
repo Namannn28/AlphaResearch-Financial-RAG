@@ -7,7 +7,7 @@ Role in RAG Pipeline:
     BM25 Lexical Retriever into a single reranked candidate list using
     Reciprocal Rank Fusion (RRF).
 
-Key Concepts for Interviews:
+Key Architectural & Design Principles:
     - Why Hybrid Retrieval: Combines semantic generalization (Dense) with exact
       number/ticker precision (BM25), eliminating blind spots of both approaches.
     - Reciprocal Rank Fusion (RRF):

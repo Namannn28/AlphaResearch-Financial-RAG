@@ -54,8 +54,8 @@ class FinancialRAGConfig:
 
     # LLM Settings
     default_provider: str = "groq"  # "groq" (default free) or "offline"
-    groq_model: str = "openai/gpt-oss-120b"
-    groq_fallback_model: str = "openai/gpt-oss-20b"
+    groq_model: str = "llama-3.3-70b-versatile"
+    groq_fallback_model: str = "llama-3.1-8b-instant"
     temperature: float = 0.1
     max_tokens: int = 600
 

@@ -7,7 +7,7 @@ Role in RAG Pipeline:
     Captures exact keyword occurrences, ticker symbols (AAPL, MSFT, TSLA),
     specific currency figures ($383,285 million), and percentages (44.1%).
 
-Key Concepts for Interviews:
+Key Architectural & Design Principles:
     - Why Dense Vectors aren't enough: Vector embeddings compress text into a
       continuous semantic space. They often fail to distinguish between
       "$383.29B" and "$393.29B", or between tickers like "GOOG" and "GOOGL".

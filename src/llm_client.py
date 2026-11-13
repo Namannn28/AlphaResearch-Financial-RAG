@@ -7,9 +7,9 @@ Role in RAG Pipeline:
     citations using LangChain's ChatGroq client. Enforces explicit refusal
     when retrieval confidence falls below the safety threshold.
 
-Key Concepts for Interviews:
+Key Architectural & Design Principles:
     - LangChain ChatGroq: Fast hosted inference via Groq's LPU architecture,
-      running active models (e.g. openai/gpt-oss-120b, openai/gpt-oss-20b).
+      running active models (e.g. llama-3.3-70b-versatile, llama-3.1-8b-instant).
     - Grounding & Guardrails: System prompt forbids financial speculation. If
       confidence < 0.28, returns structured refusal instead of hallucinating.
     - Zero-Crash Offline Fallback: If no API key is supplied or rate limits
@@ -78,10 +78,10 @@ CRITICAL INSTRUCTIONS:
     def _init_langchain_groq(self):
         """Initializes LangChain ChatGroq model with user's free API key."""
         models_to_try = [
-            "openai/gpt-oss-120b",
-            "openai/gpt-oss-20b",
-            "qwen/qwen3.8-27b",
-            "llama-3.3-70b-versatile"
+            "llama-3.3-70b-versatile",
+            "llama-3.1-8b-instant",
+            "mixtral-8x7b-32768",
+            "gemma2-9b-it"
         ]
         for m in models_to_try:
             try:
@@ -235,7 +235,7 @@ Provide a concise, professional financial analysis answering the question, with 
             "Authorization": f"Bearer {self.groq_api_key}"
         }
         payload = {
-            "model": "openai/gpt-oss-120b",
+            "model": "llama-3.3-70b-versatile",
             "messages": [
                 {"role": "system", "content": self.SYSTEM_PROMPT},
                 {"role": "user", "content": user_prompt}

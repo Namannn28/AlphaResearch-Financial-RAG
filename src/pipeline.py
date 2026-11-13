@@ -7,7 +7,7 @@ Role in RAG Pipeline:
       Ingestion -> Chunking -> Embedding -> Vector Store + BM25 ->
       Hybrid Retrieval (RRF) -> Cross-Encoder Reranker -> Guardrail -> LLM.
 
-Key Concepts for Interviews:
+Key Architectural & Design Principles:
     - Modularity: Each pipeline component (chunker, embedder, retriever, reranker,
       generator) is decoupled, testable independently, and replaceable.
     - Dynamic Indexing: Supports `.add_document(file_path)` to index new PDFs

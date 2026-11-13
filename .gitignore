@@ -25,3 +25,6 @@ Thumbs.db
 
 # User uploaded files
 data/uploads/
+
+# Personal interview preparation notes (keep local only)
+INTERVIEW_CHEAT_SHEET.md

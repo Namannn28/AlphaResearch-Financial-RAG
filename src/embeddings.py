@@ -6,7 +6,7 @@ Role in RAG Pipeline:
     Converts unstructured textual chunks and user queries into dense 384-dimensional
     vector representations that capture semantic meaning and conceptual similarity.
 
-Key Concepts for Interviews:
+Key Architectural & Design Principles:
     - Model: `sentence-transformers/all-MiniLM-L6-v2` (384 dimensions, 80MB).
     - L2 Normalization: All vectors are normalized to unit length ($\|v\| = 1$).
       This converts expensive cosine similarity into a single fast dot product:
